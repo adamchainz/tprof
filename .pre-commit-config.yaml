@@ -1,0 +1,55 @@
+ci:
+  autoupdate_schedule: monthly
+
+default_language_version:
+  python: python3.13
+
+repos:
+- repo: https://github.com/pre-commit/pre-commit-hooks
+  rev: 3e8a8703264a2f4a69428a0aa4dcb512790b2c8c  # frozen: v6.0.0
+  hooks:
+  - id: check-added-large-files
+  - id: check-case-conflict
+  - id: check-json
+  - id: check-merge-conflict
+  - id: check-symlinks
+  - id: check-toml
+  - id: end-of-file-fixer
+  - id: trailing-whitespace
+- repo: https://github.com/crate-ci/typos
+  rev: 802d5794ff9cf7b15610c47eca99cd1ab757d8d4  # frozen: v1
+  hooks:
+  - id: typos
+- repo: https://github.com/tox-dev/pyproject-fmt
+  rev: d252a2a7678b47d1f2eea2f6b846ddfdcd012759  # frozen: v2.11.1
+  hooks:
+  - id: pyproject-fmt
+- repo: https://github.com/tox-dev/tox-ini-fmt
+  rev: be26ee0d710a48f7c1acc1291d84082036207bd3  # frozen: 1.7.0
+  hooks:
+  - id: tox-ini-fmt
+- repo: https://github.com/rstcheck/rstcheck
+  rev: 27258fde1ee7d3b1e6a7bbc58f4c7b1dd0e719e5  # frozen: v6.2.5
+  hooks:
+  - id: rstcheck
+    additional_dependencies:
+    - sphinx==8.1.3
+    - tomli==2.0.1
+- repo: https://github.com/adamchainz/blacken-docs
+  rev: dda8db18cfc68df532abf33b185ecd12d5b7b326  # frozen: 1.20.0
+  hooks:
+  - id: blacken-docs
+    additional_dependencies:
+    - black==25.1.0
+- repo: https://github.com/astral-sh/ruff-pre-commit
+  rev: 36243b70e5ce219623c3503f5afba0f8c96fda55  # frozen: v0.14.7
+  hooks:
+    - id: ruff-check
+      args: [ --fix ]
+    - id: ruff-format
+- repo: https://github.com/pre-commit/mirrors-mypy
+  rev: c2738302f5cf2bfb559c1f210950badb133613ea  # frozen: v1.19.0
+  hooks:
+  - id: mypy
+    additional_dependencies:
+    - pytest==7.1.2
