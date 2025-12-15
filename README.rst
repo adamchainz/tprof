@@ -21,3 +21,76 @@
 ----
 
 A targeting profiler.
+
+----
+
+**Get better at command line Git** with my book `Boost Your Git DX <https://adamchainz.gumroad.com/l/bygdx>`__.
+
+----
+
+Requirements
+------------
+
+Python 3.12 to 3.14 supported.
+
+Installation
+------------
+
+1. Install with **pip**:
+
+   .. code-block:: sh
+
+       python -m pip install tprof
+
+Usage
+-----
+
+tprof measures the time spent in specified target functions when running a script or module.
+Unlike a full program profiler, it only tracks the specified functions using |sys.monitoring|__ (new in Python 3.12), reducing overhead and helping you focus on the bits you’re changing.
+
+.. |sys.monitoring| replace:: ``sys.monitoring``
+__ https://docs.python.org/3/library/sys.html#sys.monitoring
+
+tprof supports usage as a CLI and with a Python API.
+
+CLI
+^^^
+
+Specify one or more target functions with ``-t``, then what to run: a script file by filename, or a module with ``-m`` then its name.
+Any extra arguments are passed to the script or module.
+
+.. code-block:: console
+
+    $ tprof -t lib.math ./example.py
+    ...
+    🎯 tprof results:
+      lib:maths(): 608ms
+
+API
+^^^
+
+Use ``trprof.tprof`` as a context manager, passing the list of target functions.
+
+.. code-block:: python
+
+    import time
+
+    from tprof import tprof
+
+
+    def maths():
+        time.sleep(0.3)
+
+
+    def main():
+        with tprof(maths):
+            print("Doing maths")
+            maths()
+            print("And again")
+            maths()
+
+
+    if __name__ == "__main__":
+        main()
+
+Targets can be specified as strings or callables.
