@@ -68,7 +68,7 @@ def test_main_script(tmp_path, capsys):
     assert out == "Done.\n"
     errlines = err.splitlines()
     assert len(errlines) == 2
-    assert errlines[0] == "🎯 tprof total times:"
+    assert errlines[0] == "🎯 tprof results:"
     assert errlines[1].startswith("  pathlib:Path.__new__(): ")
 
 
@@ -98,5 +98,5 @@ def test_main_module(tmp_path, capsys):
     assert out == "Done.\n"
     errlines = err.splitlines()
     assert len(errlines) == 2
-    assert errlines[0] == "🎯 tprof total times:"
+    assert errlines[0] == "🎯 tprof results:"
     assert errlines[1].startswith("  pathlib:Path.__new__(): ")
