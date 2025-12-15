@@ -27,7 +27,7 @@ def tprof(*targets: Any) -> Generator[None]:
     for target in targets:
         code = _extract_code(target)
         if code is None:
-            raise ValueError(f"Cannot extract code object from {target}")
+            raise ValueError(f"Cannot extract code object from {target!r}.")
 
         if isinstance(target, str):
             name = target
@@ -48,14 +48,16 @@ def tprof(*targets: Any) -> Generator[None]:
         enter_times[code] = []
         total_times[name] = 0
 
-    def py_start_callback(code: CodeType, instruction_offset: int) -> object:
+    def py_start_callback(
+        code: CodeType, instruction_offset: int
+    ) -> object:  # pragma: no cover
         if code in enter_times:
             enter_times[code].append(time.perf_counter_ns())
         return None
 
     def py_return_callback(
         code: CodeType, instruction_offset: int, retval: object
-    ) -> object:
+    ) -> object:  # pragma: no cover
         if code in enter_times and enter_times[code]:
             enter_time = enter_times[code].pop()
             elapsed = time.perf_counter_ns() - enter_time
@@ -65,7 +67,7 @@ def tprof(*targets: Any) -> Generator[None]:
 
     def py_unwind_callback(
         code: CodeType, instruction_offset: int, exception: BaseException
-    ) -> object:
+    ) -> object:  # pragma: no cover
         if code in enter_times and enter_times[code]:
             enter_time = enter_times[code].pop()
             elapsed = time.perf_counter_ns() - enter_time
@@ -102,8 +104,8 @@ def tprof(*targets: Any) -> Generator[None]:
         sys.monitoring.register_callback(TOOL_ID, sys.monitoring.events.PY_UNWIND, None)
         sys.monitoring.free_tool_id(TOOL_ID)
 
-        c = Colourizer(sys.stderr)
-        print(f"🎯 {c.red_bold('tprof')} total times:", file=sys.stderr)
+        c = Colourizer(enabled=sys.stderr.isatty())
+        print(f"🎯 {c.red_bold('tprof')} results:", file=sys.stderr)
         for name in total_times:
             for name in sorted(total_times):
                 formatted_time = _format_time(total_times[name])
@@ -113,8 +115,8 @@ def tprof(*targets: Any) -> Generator[None]:
 class Colourizer:
     __slots__ = ("enabled",)
 
-    def __init__(self, stream: Any) -> None:
-        self.enabled = stream.isatty()
+    def __init__(self, *, enabled: bool) -> None:
+        self.enabled = enabled
 
     def bold(self, text: str) -> str:
         if self.enabled:
@@ -133,10 +135,10 @@ def _format_time(ns: int) -> str:
         return f"{ns}ns"
     elif ns < 1_000_000:
         us = ns / 1_000
-        return f"{us:.0f}μs"
+        return f"{us:,.0f}μs"
     elif ns < 1_000_000_000:
         ms = ns / 1_000_000
-        return f"{ms:.0f}ms"
+        return f"{ms:,.0f}ms"
     else:
         s = ns / 1_000_000_000
         return f"{s:,.0f}s"
@@ -158,19 +160,8 @@ def _extract_code(obj: Any) -> CodeType | None:
     except AttributeError:
         pass
 
-    try:
-        code = obj.__func__.__code__
-        return code
-    except AttributeError:
-        pass
-
     if callable(obj) and hasattr(obj, "__call__"):  # noqa: B004
         call_method = obj.__call__
-        try:
-            code = call_method.__func__.__code__
-            return code
-        except AttributeError:
-            pass
         try:
             code = call_method.__code__
             return code
