@@ -21,12 +21,18 @@ def main(argv: Sequence[str] | None = None) -> int:
         required=True,
         help="Target callable to profile (format: module:function).",
     )
-    parser.add_argument(
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument(
         "-m",
         metavar="module",
         dest="module",
-        required=True,
         help="Run library module as a script (like python -m)",
+    )
+    group.add_argument("script", nargs="?", help="Python script to run")
+    parser.add_argument(
+        "args",
+        nargs=argparse.REMAINDER,
+        help="Arguments to pass to the script or module",
     )
 
     if len(argv) == 0:
@@ -35,33 +41,26 @@ def main(argv: Sequence[str] | None = None) -> int:
         parser.print_help()
         return 2
 
-    args, unparsed_argv = parser.parse_known_args(argv)
-
-    # TODO: script support
-    # if args.module:
-
-    # When profiling a module, consider the arguments after "-m module" to
-    # be arguments to the module itself, so parse the arguments before
-    # "-m" to check if any are invalid, for example:
-    # "tprof -m foo --spam" means passing "--spam" to "foo"
-    # "tprof --spam -m foo" means passing "--spam" to "tprof", which is invalid
-    index = argv.index("-m") + 2
-    parser.parse_args(argv[:index])
-
-    # TODO: script support
-    # if args.module and args.script:
-    #     parser.error("Cannot specify both script and -m module")
-    # if not args.module and not args.script:
-    #     parser.error("Must specify either script or -m module")
+    args = parser.parse_args(argv)
 
     with tprof(*args.targets):
-        # Run as module (like python -m)
         orig_sys_argv = sys.argv
-        sys.argv = [args.module, *unparsed_argv]
+        sys.argv = [args.module, *args.args]
         try:
-            import runpy
+            if args.module:
+                import runpy
 
-            runpy.run_module(args.module, run_name="__main__", alter_sys=True)
+                runpy.run_module(args.module, run_name="__main__", alter_sys=True)
+            else:
+                with open(args.script, "rb") as f:
+                    code = compile(f.read(), args.script, "exec")
+                    exec(
+                        code,
+                        {
+                            "__name__": "__main__",
+                            "__file__": args.script,
+                        },
+                    )
         finally:
             sys.argv = orig_sys_argv
 
