@@ -61,33 +61,66 @@ Any extra arguments are passed to the script or module.
 
 .. code-block:: console
 
-    $ tprof -t lib.math ./example.py
+    $ tprof -t lib:maths ./example.py
     ...
     🎯 tprof results:
-      lib:maths(): 608ms
+     function    calls total  mean ± σ     min … max
+     lib:maths()     2 610ms 305ms ± 2ms 304ms … 307ms
+
+Full help:
+
+.. [[[cog
+.. import cog
+.. import subprocess
+.. import sys
+.. result = subprocess.run(
+..     [sys.executable, "-m", "tprof", "--help"],
+..     capture_output=True,
+..     text=True,
+.. )
+.. cog.outl("")
+.. cog.outl(".. code-block:: console")
+.. cog.outl("")
+.. for line in result.stdout.splitlines():
+..     if line.strip() == "":
+..         cog.outl("")
+..     else:
+..         cog.outl("   " + line.rstrip())
+.. cog.outl("")
+.. ]]]
+
+.. code-block:: console
+
+   usage: tprof [-h] -t target (-m module | script) ...
+
+   positional arguments:
+     script      Python script to run
+     args        Arguments to pass to the script or module
+
+   options:
+     -h, --help  show this help message and exit
+     -t target   Target callable to profile (format: module:function).
+     -m module   Run library module as a script (like python -m)
+
+.. [[[end]]]
 
 API
 ^^^
 
-Use ``trprof.tprof`` as a context manager, passing the list of target functions.
+Use ``tprof.tprof`` as a context manager, passing the list of target functions.
 
 .. code-block:: python
 
-    import time
-
     from tprof import tprof
 
-
-    def maths():
-        time.sleep(0.3)
+    from lib import maths
 
 
     def main():
         with tprof(maths):
-            print("Doing maths")
+            ...
             maths()
-            print("And again")
-            maths()
+            ...
 
 
     if __name__ == "__main__":

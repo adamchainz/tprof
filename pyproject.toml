@@ -42,6 +42,7 @@ scripts.tprof = "tprof.main:main"
 
 [dependency-groups]
 test = [
+  "cogapp>=3.6",
   "coverage[toml]",
   "pytest",
   "pytest-randomly",
