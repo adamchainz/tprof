@@ -67,9 +67,10 @@ def test_main_script(tmp_path, capsys):
     out, err = capsys.readouterr()
     assert out == "Done.\n"
     errlines = err.splitlines()
-    assert len(errlines) == 2
+    assert len(errlines) == 3
     assert errlines[0] == "🎯 tprof results:"
-    assert errlines[1].startswith("  pathlib:Path.__new__(): ")
+    assert errlines[1].startswith(" function")
+    assert errlines[2].startswith(" pathlib:Path.__new__() ")
 
 
 def test_main_module(tmp_path, capsys):
@@ -88,7 +89,10 @@ def test_main_module(tmp_path, capsys):
     )
 
     try:
-        with chdir(tmp_path), mock.patch.object(sys, "path", [str(tmp_path)]):
+        with (
+            chdir(tmp_path),
+            mock.patch.object(sys, "path", [str(tmp_path), *sys.path]),
+        ):
             result = main(["-t", "pathlib:Path.__new__", "-m", "example"])
     finally:
         sys.modules.pop("example", None)
@@ -97,6 +101,7 @@ def test_main_module(tmp_path, capsys):
     out, err = capsys.readouterr()
     assert out == "Done.\n"
     errlines = err.splitlines()
-    assert len(errlines) == 2
+    assert len(errlines) == 3
     assert errlines[0] == "🎯 tprof results:"
-    assert errlines[1].startswith("  pathlib:Path.__new__(): ")
+    assert errlines[1].startswith(" function")
+    assert errlines[2].startswith(" pathlib:Path.__new__() ")

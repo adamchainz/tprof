@@ -32,7 +32,9 @@ classifiers = [
   "Programming Language :: Python :: 3.14",
   "Typing :: Typed",
 ]
-dependencies = [  ]
+dependencies = [
+  "rich>=14.2",
+]
 urls.Changelog = "https://github.com/adamchainz/tprof/blob/main/CHANGELOG.rst"
 urls.Funding = "https://adamj.eu/books/"
 urls.Repository = "https://github.com/adamchainz/tprof"
