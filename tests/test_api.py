@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from tprof import tprof
-from tprof.api import Colourizer, _extract_code, _format_time
+from tprof.api import _extract_code, _format_time
 
 
 class TestTprof:
@@ -34,10 +34,11 @@ class TestTprof:
         out, err = capsys.readouterr()
         assert out == ""
         errlines = err.splitlines()
-        assert len(errlines) == 2
+        assert len(errlines) == 3
         assert errlines[0].startswith("🎯 tprof results:")
-        assert errlines[1].startswith(
-            "  tests.test_api:TestTprof.test_called_once.<locals>.sample(): "
+        assert errlines[1].startswith(" function")
+        assert errlines[2].startswith(
+            " tests.test_api:TestTprof.test_called_once.<locals>.sample() "
         )
 
     def test_other_method(self, capsys):
@@ -56,10 +57,11 @@ class TestTprof:
         out, err = capsys.readouterr()
         assert out == ""
         errlines = err.splitlines()
-        assert len(errlines) == 2
+        assert len(errlines) == 3
         assert errlines[0].startswith("🎯 tprof results:")
-        assert errlines[1].startswith(
-            "  tests.test_api:TestTprof.test_other_method.<locals>.sample(): "
+        assert errlines[1].startswith(" function")
+        assert errlines[2].startswith(
+            " tests.test_api:TestTprof.test_other_method.<locals>.sample() "
         )
 
     def test_raises(self, capsys):
@@ -78,10 +80,11 @@ class TestTprof:
         out, err = capsys.readouterr()
         assert out == ""
         errlines = err.splitlines()
-        assert len(errlines) == 2
+        assert len(errlines) == 3
         assert errlines[0].startswith("🎯 tprof results:")
-        assert errlines[1].startswith(
-            "  tests.test_api:TestTprof.test_raises.<locals>.sample(): "
+        assert errlines[1].startswith(" function")
+        assert errlines[2].startswith(
+            " tests.test_api:TestTprof.test_raises.<locals>.sample() "
         )
 
     def test_recursive(self, capsys):
@@ -99,10 +102,11 @@ class TestTprof:
         out, err = capsys.readouterr()
         assert out == ""
         errlines = err.splitlines()
-        assert len(errlines) == 2
+        assert len(errlines) == 3
         assert errlines[0].startswith("🎯 tprof results:")
-        assert errlines[1].startswith(
-            "  tests.test_api:TestTprof.test_recursive.<locals>.factorial(): "
+        assert errlines[1].startswith(" function")
+        assert errlines[2].startswith(
+            " tests.test_api:TestTprof.test_recursive.<locals>.factorial() "
         )
 
     def test_bad_dunder_module(self, capsys):
@@ -120,50 +124,41 @@ class TestTprof:
         out, err = capsys.readouterr()
         assert out == ""
         errlines = err.splitlines()
-        assert len(errlines) == 2
+        assert len(errlines) == 3
         assert errlines[0].startswith("🎯 tprof results:")
-        assert errlines[1].startswith(
-            "  <unknown>:TestTprof.test_bad_dunder_module.<locals>.sample(): "
+        assert errlines[1].startswith(" function")
+        assert errlines[2].startswith(
+            " <unknown>:TestTprof.test_bad_dunder_module.<locals>.sample() "
         )
 
 
-class TestColourizer:
-    def test_bold_enabled(self):
-        colourizer = Colourizer(enabled=True)
-        result = colourizer.bold("Test")
-        assert result == "\033[1mTest\033[0m"
-
-    def test_bold_disabled(self):
-        colourizer = Colourizer(enabled=False)
-        result = colourizer.bold("Test")
-        assert result == "Test"
-
-    def test_red_bold_enabled(self):
-        colourizer = Colourizer(enabled=True)
-        result = colourizer.red_bold("Error")
-        assert result == "\033[1;31mError\033[0m"
-
-    def test_red_bold_disabled(self):
-        colourizer = Colourizer(enabled=False)
-        result = colourizer.red_bold("Error")
-        assert result == "Error"
-
-
 class TestFormatTime:
-    def test_format_time_ns(self):
-        assert _format_time(500) == "500ns"
+    def test_ns_no_colour(self):
+        assert _format_time(999, None) == "999ns"
 
-    def test_format_time_us(self):
-        assert _format_time(1500) == "2μs"
-        assert _format_time(999_999) == "1,000μs"
+    def test_ns_with_colour(self):
+        assert _format_time(999, "red") == "[red]999[/red]ns"
 
-    def test_format_time_ms(self):
-        assert _format_time(1_500_000) == "2ms"
-        assert _format_time(999_999_999) == "1,000ms"
+    def test_us_no_colour(self):
+        assert _format_time(1_500, None) == "2μs"
 
-    def test_format_time_s(self):
-        assert _format_time(1_500_000_000) == "2s"
-        assert _format_time(3_600_000_000_000) == "3,600s"
+    def test_us_with_colour(self):
+        assert _format_time(1_500, "green") == "[green]2[/green]μs"
+
+    def test_ms_no_colour(self):
+        assert _format_time(2_500_000, None) == "2ms"
+
+    def test_ms_with_colour(self):
+        assert _format_time(2_500_000, "blue") == "[blue]2[/blue]ms"
+
+    def test_s_no_colour(self):
+        assert _format_time(3_500_000_000, None) == "4s "
+
+    def test_s_with_colour(self):
+        assert _format_time(3_500_000_000, "yellow") == "[yellow]4[/yellow]s "
+
+    def test_big_s_no_colour(self):
+        assert _format_time(12_345_678_901_234, None) == "12,346s "
 
 
 class TestExtractCode:

@@ -5,8 +5,12 @@ import time
 from collections.abc import Generator
 from contextlib import contextmanager
 from pkgutil import resolve_name
+from statistics import mean, stdev
 from types import CodeType
 from typing import Any
+
+import rich
+from rich.table import Table
 
 TOOL_ID = sys.monitoring.PROFILER_ID
 TOOL_NAME = "tprof"
@@ -19,7 +23,7 @@ def tprof(*targets: Any) -> Generator[None]:
     """
     code_to_name: dict[CodeType, str] = {}
     enter_times: dict[CodeType, list[int]] = {}
-    total_times: dict[str, int] = {}
+    call_times: dict[CodeType, list[int]] = {}
 
     if not targets:
         raise ValueError("At least one target callable must be provided.")
@@ -46,7 +50,7 @@ def tprof(*targets: Any) -> Generator[None]:
 
         code_to_name[code] = name
         enter_times[code] = []
-        total_times[name] = 0
+        call_times[code] = []
 
     def py_start_callback(
         code: CodeType, instruction_offset: int
@@ -60,9 +64,7 @@ def tprof(*targets: Any) -> Generator[None]:
     ) -> object:  # pragma: no cover
         if code in enter_times and enter_times[code]:
             enter_time = enter_times[code].pop()
-            elapsed = time.perf_counter_ns() - enter_time
-            name = code_to_name[code]
-            total_times[name] += elapsed
+            call_times[code].append(time.perf_counter_ns() - enter_time)
         return None
 
     def py_unwind_callback(
@@ -70,9 +72,7 @@ def tprof(*targets: Any) -> Generator[None]:
     ) -> object:  # pragma: no cover
         if code in enter_times and enter_times[code]:
             enter_time = enter_times[code].pop()
-            elapsed = time.perf_counter_ns() - enter_time
-            name = code_to_name[code]
-            total_times[name] += elapsed
+            call_times[code].append(time.perf_counter_ns() - enter_time)
         return None
 
     sys.monitoring.use_tool_id(TOOL_ID, TOOL_NAME)
@@ -104,44 +104,60 @@ def tprof(*targets: Any) -> Generator[None]:
         sys.monitoring.register_callback(TOOL_ID, sys.monitoring.events.PY_UNWIND, None)
         sys.monitoring.free_tool_id(TOOL_ID)
 
-        c = Colourizer(enabled=sys.stderr.isatty())
-        print(f"🎯 {c.red_bold('tprof')} results:", file=sys.stderr)
-        for name in total_times:
-            for name in sorted(total_times):
-                formatted_time = _format_time(total_times[name])
-                print(f"  {c.bold(name + '()')}: {formatted_time}", file=sys.stderr)
+        rich.print("[bold red]🎯 tprof[/bold red] results:", file=sys.stderr)
+
+        table = Table(box=None, collapse_padding=True)
+
+        table.add_column("function")
+        table.add_column("calls", justify="right")
+        table.add_column("total", justify="right")
+        table.add_column("mean", header_style="bright_green", justify="right")
+        table.add_column("±", justify="right")
+        table.add_column("σ", header_style="bright_green", justify="left")
+        table.add_column("min", header_style="cyan", justify="right")
+        table.add_column("…", justify="right")
+        table.add_column("max", header_style="magenta", justify="left")
+
+        for code, times in call_times.items():
+            table.add_row(
+                f"[bold]{code_to_name[code]}()[/bold]",
+                str(len(times)),
+                _format_time(sum(times), None),
+                (
+                    _format_time(int(mean(times)), "bright_green")
+                    if times
+                    else "[dim]n/a[/dim]"
+                ),
+                "±" if len(times) > 1 else "",
+                _format_time(int(stdev(times)), "bright_green")
+                if len(times) > 1
+                else "",
+                _format_time(min(times), "cyan") if times else "[dim]n/a[/dim]",
+                "…",
+                _format_time(max(times), "magenta") if times else "[dim]n/a[/dim]",
+            )
+        rich.print(table, file=sys.stderr)
 
 
-class Colourizer:
-    __slots__ = ("enabled",)
-
-    def __init__(self, *, enabled: bool) -> None:
-        self.enabled = enabled
-
-    def bold(self, text: str) -> str:
-        if self.enabled:
-            return f"\033[1m{text}\033[0m"
-        return text
-
-    def red_bold(self, text: str) -> str:
-        if self.enabled:
-            return f"\033[1;31m{text}\033[0m"
-        return text
-
-
-def _format_time(ns: int) -> str:
+def _format_time(ns: int, colour: str | None) -> str:
     """Format time in nanoseconds to appropriate scale with comma separators."""
     if ns < 1_000:
-        return f"{ns}ns"
+        value = str(ns)
+        suffix = "ns"
     elif ns < 1_000_000:
-        us = ns / 1_000
-        return f"{us:,.0f}μs"
+        value = f"{ns / 1_000:.0f}"
+        suffix = "μs"
     elif ns < 1_000_000_000:
-        ms = ns / 1_000_000
-        return f"{ms:,.0f}ms"
+        value = f"{ns / 1_000_000:.0f}"
+        suffix = "ms"
     else:
-        s = ns / 1_000_000_000
-        return f"{s:,.0f}s"
+        value = f"{ns / 1_000_000_000:,.0f}"
+        suffix = "s "
+
+    if colour:
+        return f"[{colour}]{value}[/{colour}]{suffix}"
+    else:
+        return f"{value}{suffix}"
 
 
 def _extract_code(obj: Any) -> CodeType | None:
