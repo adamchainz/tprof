@@ -131,6 +131,26 @@ class TestTprof:
             " <unknown>:TestTprof.test_bad_dunder_module.<locals>.sample() "
         )
 
+    def test_custom_label(self, capsys):
+        def sample() -> int:
+            return 42
+
+        def main() -> None:
+            sample()
+
+        with tprof(sample, label="sample"):
+            main()
+
+        out, err = capsys.readouterr()
+        assert out == ""
+        errlines = err.splitlines()
+        assert len(errlines) == 3
+        assert errlines[0].startswith("🎯 tprof results @ sample:")
+        assert errlines[1].startswith(" function")
+        assert errlines[2].startswith(
+            " tests.test_api:TestTprof.test_custom_label.<locals>.sample() "
+        )
+
 
 class TestFormatTime:
     def test_ns_no_colour(self):
