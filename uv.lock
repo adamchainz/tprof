@@ -3,6 +3,15 @@ revision = 3
 requires-python = ">=3.12"
 
 [[package]]
+name = "cogapp"
+version = "3.6.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/64/ea/4ffa8095e0b675e9961cbdcad002c09d35d4ab76ff99d61a014e9e6bcd53/cogapp-3.6.0.tar.gz", hash = "sha256:ec2a9170bfa644bf0d91996fdb5576c13d7e5e848bb2378a6f92727b48f92604", size = 59742, upload-time = "2025-09-21T15:54:13.553Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/05/1c/23b5110b7cb305f0fe3a5d6809d6804c1cb57d57b59516dbb5e24aaf95fc/cogapp-3.6.0-py3-none-any.whl", hash = "sha256:6ea11c63221f92978d37d8d76208eadeae2a6e4641d323f165738a5464a19d32", size = 30550, upload-time = "2025-09-21T15:54:12.205Z" },
+]
+
+[[package]]
 name = "colorama"
 version = "0.4.6"
 source = { registry = "https://pypi.org/simple" }
@@ -183,16 +192,18 @@ dependencies = [
 
 [package.dev-dependencies]
 test = [
+    { name = "cogapp" },
     { name = "coverage" },
     { name = "pytest" },
     { name = "pytest-randomly" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "rich", specifier = ">=14.2.0" }]
+requires-dist = [{ name = "rich", specifier = ">=14.2" }]
 
 [package.metadata.requires-dev]
 test = [
+    { name = "cogapp", specifier = ">=3.6.0" },
     { name = "coverage", extras = ["toml"] },
     { name = "pytest" },
     { name = "pytest-randomly" },
