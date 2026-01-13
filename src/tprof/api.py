@@ -17,7 +17,7 @@ TOOL_NAME = "tprof"
 
 
 @contextmanager
-def tprof(*targets: Any) -> Generator[None]:
+def tprof(*targets: Any, label: str | None = None) -> Generator[None]:
     """
     Profile time spent in target callables and print a report when done.
     """
@@ -104,7 +104,11 @@ def tprof(*targets: Any) -> Generator[None]:
         sys.monitoring.register_callback(TOOL_ID, sys.monitoring.events.PY_UNWIND, None)
         sys.monitoring.free_tool_id(TOOL_ID)
 
-        rich.print("[bold red]🎯 tprof[/bold red] results:", file=sys.stderr)
+        heading = "[bold red]🎯 tprof[/bold red] results"
+        if label:
+            heading += f" @ [bold bright_blue]{label}[/bold bright_blue]"
+        heading += ":"
+        rich.print(heading, file=sys.stderr)
 
         table = Table(box=None, collapse_padding=True)
 

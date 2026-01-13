@@ -54,7 +54,7 @@ __ https://docs.python.org/3/library/sys.html#sys.monitoring
 tprof supports usage as a CLI and with a Python API.
 
 CLI
-^^^
+---
 
 Specify one or more target functions with ``-t``, then what to run: a script file by filename, or a module with ``-m`` then its name.
 Any extra arguments are passed to the script or module.
@@ -105,9 +105,22 @@ Full help:
 .. [[[end]]]
 
 API
-^^^
+---
 
-Use ``tprof.tprof`` as a context manager, passing the list of target functions.
+``tprof(*targets, label: str | None = None)``
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Use this context manager / decorator within your code to perform profiling in a specific block.
+The report is printed when the block ends, each time it ends.
+
+Each item in ``targets`` may be a callable to profile, or a string reference to one that will be resolved with |pkgutil.resolve_name()|__.
+
+.. |pkgutil.resolve_name()| replace:: ``pkgutil.resolve_name()``
+__ https://docs.python.org/3.14/library/pkgutil.html#pkgutil.resolve_name
+
+``label`` is an optional string to add to the report heading to distinguish multiple reports.
+
+For example:
 
 .. code-block:: python
 
@@ -126,4 +139,13 @@ Use ``tprof.tprof`` as a context manager, passing the list of target functions.
     if __name__ == "__main__":
         main()
 
-Targets can be specified as strings or callables.
+…which will look like this when run:
+
+.. code-block:: console
+
+    $ python example2.py
+    Doing maths
+    And again
+    🎯 tprof results:
+     function         calls total  mean ± σ     min … max
+     __main__:maths()     2 608ms 304ms ± 2ms 303ms … 305ms
