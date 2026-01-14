@@ -2,7 +2,6 @@
 #include <Python.h>
 
 typedef struct {
-    PyObject *code_to_name;
     PyObject *enter_times;
     PyObject *call_times;
     PyObject *perf_counter_ns;
@@ -34,6 +33,7 @@ py_start_callback(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
         }
         Py_RETURN_NONE;
     }
+    Py_INCREF(times_list);
 
     PyObject *timestamp = PyObject_CallNoArgs(state->perf_counter_ns);
     if (timestamp == NULL) {
@@ -42,6 +42,7 @@ py_start_callback(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 
     int result = PyList_Append(times_list, timestamp);
     Py_DECREF(timestamp);
+    Py_DECREF(times_list);
     if (result < 0) {
         return NULL;
     }
@@ -67,9 +68,11 @@ py_end_callback(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
         }
         Py_RETURN_NONE;
     }
+    Py_INCREF(times_list);
 
     Py_ssize_t list_len = PyList_Size(times_list);
     if (list_len <= 0) {
+        Py_DECREF(times_list);
         if (list_len < 0) {
             return NULL;
         }
@@ -78,14 +81,17 @@ py_end_callback(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 
     PyObject *enter_time = PyList_GetItem(times_list, list_len - 1);
     if (enter_time == NULL) {
+        Py_DECREF(times_list);
         return NULL;
     }
     Py_INCREF(enter_time);
 
-    if (PyList_SetSlice(times_list, list_len - 1, list_len, NULL) < 0) {
+    if (PySequence_DelItem(times_list, list_len - 1) < 0) {
         Py_DECREF(enter_time);
+        Py_DECREF(times_list);
         return NULL;
     }
+    Py_DECREF(times_list);
 
     PyObject *current_time = PyObject_CallNoArgs(state->perf_counter_ns);
     if (current_time == NULL) {
@@ -108,9 +114,11 @@ py_end_callback(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
         }
         Py_RETURN_NONE;
     }
+    Py_INCREF(call_times_list);
 
     int result = PyList_Append(call_times_list, duration);
     Py_DECREF(duration);
+    Py_DECREF(call_times_list);
     if (result < 0) {
         return NULL;
     }
@@ -127,6 +135,9 @@ static int
 record_exec(PyObject *module)
 {
     RecordModuleState *state = get_module_state(module);
+    state->enter_times = NULL;
+    state->call_times = NULL;
+    state->perf_counter_ns = NULL;
 
     PyObject *time_module = PyImport_ImportModule("time");
     if (time_module == NULL) {
@@ -141,12 +152,6 @@ record_exec(PyObject *module)
 
     PyObject *api_module = PyImport_ImportModule("tprof.api");
     if (api_module == NULL) {
-        goto error;
-    }
-
-    state->code_to_name = PyObject_GetAttrString(api_module, "code_to_name");
-    if (state->code_to_name == NULL) {
-        Py_DECREF(api_module);
         goto error;
     }
 
@@ -166,7 +171,6 @@ record_exec(PyObject *module)
     return 0;
 
 error:
-    Py_CLEAR(state->code_to_name);
     Py_CLEAR(state->enter_times);
     Py_CLEAR(state->call_times);
     Py_CLEAR(state->perf_counter_ns);
@@ -177,7 +181,6 @@ static int
 record_traverse(PyObject *module, visitproc visit, void *arg)
 {
     RecordModuleState *state = get_module_state(module);
-    Py_VISIT(state->code_to_name);
     Py_VISIT(state->enter_times);
     Py_VISIT(state->call_times);
     Py_VISIT(state->perf_counter_ns);
@@ -188,7 +191,6 @@ static int
 record_clear(PyObject *module)
 {
     RecordModuleState *state = get_module_state(module);
-    Py_CLEAR(state->code_to_name);
     Py_CLEAR(state->enter_times);
     Py_CLEAR(state->call_times);
     Py_CLEAR(state->perf_counter_ns);
