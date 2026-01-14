@@ -48,6 +48,21 @@ test = [
   "pytest-randomly",
 ]
 
+[tool.cibuildwheel]
+build = [
+  "cp314-*",
+  "cp314t-*",
+  "cp313-*",
+  "cp313t-*",
+  "cp312-*",
+  "cp311-*",
+  "cp310-*",
+]
+enable = [
+  # Enable free-threaded wheels on Python 3.13 (where it was experimental)
+  "cpython-freethreading",
+]
+
 [tool.ruff]
 lint.select = [
   # flake8-bugbear

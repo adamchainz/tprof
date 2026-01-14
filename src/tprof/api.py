@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import sys
-import time
 from collections.abc import Generator
 from contextlib import contextmanager
 from pkgutil import resolve_name
@@ -17,6 +16,10 @@ TOOL_NAME = "tprof"
 
 console = Console(stderr=True)
 
+code_to_name: dict[CodeType, str] = {}
+enter_times: dict[CodeType, list[int]] = {}
+call_times: dict[CodeType, list[int]] = {}
+
 
 @contextmanager
 def tprof(
@@ -27,9 +30,8 @@ def tprof(
     """
     Profile time spent in target callables and print a report when done.
     """
-    code_to_name: dict[CodeType, str] = {}
-    enter_times: dict[CodeType, list[int]] = {}
-    call_times: dict[CodeType, list[int]] = {}
+
+    from tprof import record
 
     if not targets:
         raise ValueError("At least one target callable must be provided.")
@@ -58,38 +60,15 @@ def tprof(
         enter_times[code] = []
         call_times[code] = []
 
-    def py_start_callback(
-        code: CodeType, instruction_offset: int
-    ) -> object:  # pragma: no cover
-        if code in enter_times:
-            enter_times[code].append(time.perf_counter_ns())
-        return None
-
-    def py_return_callback(
-        code: CodeType, instruction_offset: int, retval: object
-    ) -> object:  # pragma: no cover
-        if code in enter_times and enter_times[code]:
-            enter_time = enter_times[code].pop()
-            call_times[code].append(time.perf_counter_ns() - enter_time)
-        return None
-
-    def py_unwind_callback(
-        code: CodeType, instruction_offset: int, exception: BaseException
-    ) -> object:  # pragma: no cover
-        if code in enter_times and enter_times[code]:
-            enter_time = enter_times[code].pop()
-            call_times[code].append(time.perf_counter_ns() - enter_time)
-        return None
-
     sys.monitoring.use_tool_id(TOOL_ID, TOOL_NAME)
     sys.monitoring.register_callback(
-        TOOL_ID, sys.monitoring.events.PY_START, py_start_callback
+        TOOL_ID, sys.monitoring.events.PY_START, record.py_start_callback
     )
     sys.monitoring.register_callback(
-        TOOL_ID, sys.monitoring.events.PY_RETURN, py_return_callback
+        TOOL_ID, sys.monitoring.events.PY_RETURN, record.py_end_callback
     )
     sys.monitoring.register_callback(
-        TOOL_ID, sys.monitoring.events.PY_UNWIND, py_unwind_callback
+        TOOL_ID, sys.monitoring.events.PY_UNWIND, record.py_end_callback
     )
 
     sys.monitoring.set_events(
@@ -175,6 +154,10 @@ def tprof(
                 *delta,
             )
         console.print(table)
+
+        code_to_name.clear()
+        enter_times.clear()
+        call_times.clear()
 
 
 def _format_time(ns: int, colour: str | None) -> str:

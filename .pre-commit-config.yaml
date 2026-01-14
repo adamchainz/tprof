@@ -1,5 +1,7 @@
 ci:
   autoupdate_schedule: monthly
+  skip:
+  - clang-format
 
 default_language_version:
   python: python3.13
@@ -53,3 +55,14 @@ repos:
   - id: mypy
     additional_dependencies:
     - pytest==7.1.2
+
+- repo: local
+  hooks:
+  - id: clang-format
+    name: clang-format
+    description: ''
+    entry: clang-format -i
+    language: system
+    types_or:
+    - c
+    args: [ -style=file ]
