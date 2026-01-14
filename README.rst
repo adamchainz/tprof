@@ -219,3 +219,20 @@ Another example using comparison mode:
      function          calls total  mean ± σ      min … max delta
      __main__:before()   100 227ms   2ms ± 83μs   2ms … 3ms -
      __main__:after()    100  85ms 853μs ± 22μs 835μs … 1ms -62.35%
+
+History
+-------
+
+When optimizing Python code, I found I was using this workflow:
+
+1. Profile the whole program with a tool like `cProfile <https://docs.python.org/3.14/library/profile.html>`__ or `py-spy <https://github.com/benfred/py-spy>`__ to find slow functions.
+2. Pick a function to optimize.
+3. Make a change.
+4. Re-profile the whole program to see if the changes helped.
+
+This works fined but profiling the whole program again adds overhead, and picking out the one function’s stats from the report is extra work.
+When I saw that Python 3.12’s |sys.monitoring|__ allows tracking specific functions with low overhead, I created tprof to streamline this workflow, allowing the final step to re-profile just the target function.
+
+It also seemed a natural extension that tprof could compare multiple functions, supporting a nice microbenchmarking workflow.
+
+Output inspired by `poop <https://github.com/andrewrk/poop>`__.
