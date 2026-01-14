@@ -22,6 +22,9 @@
 
 A targeting profiler.
 
+.. figure:: https://raw.githubusercontent.com/adamchainz/tprof/main/screenshot.svg
+   :alt: tprof in action.
+
 ----
 
 **Get better at command line Git** with my book `Boost Your Git DX <https://adamchainz.gumroad.com/l/bygdx>`__.

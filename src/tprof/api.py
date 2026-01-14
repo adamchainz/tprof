@@ -9,11 +9,13 @@ from statistics import mean, stdev
 from types import CodeType
 from typing import Any
 
-import rich
+from rich.console import Console
 from rich.table import Table
 
 TOOL_ID = sys.monitoring.PROFILER_ID
 TOOL_NAME = "tprof"
+
+console = Console(stderr=True)
 
 
 @contextmanager
@@ -112,7 +114,7 @@ def tprof(
         if label:
             heading += f" @ [bold bright_blue]{label}[/bold bright_blue]"
         heading += ":"
-        rich.print(heading, file=sys.stderr)
+        console.print(heading)
 
         table = Table(box=None, collapse_padding=True)
 
@@ -172,7 +174,7 @@ def tprof(
                 _format_time(max(times), "magenta") if times else "[dim]n/a[/dim]",
                 *delta,
             )
-        rich.print(table, file=sys.stderr)
+        console.print(table)
 
 
 def _format_time(ns: int, colour: str | None) -> str:
