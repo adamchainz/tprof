@@ -21,6 +21,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         required=True,
         help="Target callable to profile (format: module:function).",
     )
+    parser.add_argument(
+        "--compare",
+        action="store_true",
+        help="Compare performance of targets, with the first as baseline.",
+    )
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument(
         "-m",
@@ -43,7 +48,17 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     args = parser.parse_args(argv)
 
-    with tprof(*args.targets):
+    if args.module:
+        sys.path.insert(0, "")
+
+    targets = args.targets
+    if args.module:
+        targets = [
+            f"{args.module}:{target}" if ":" not in target else target
+            for target in targets
+        ]
+
+    with tprof(*targets, compare=args.compare):
         orig_sys_argv = sys.argv
         sys.argv = [args.module, *args.args]
         try:
@@ -63,5 +78,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                     )
         finally:
             sys.argv = orig_sys_argv
+
+    if args.module:
+        sys.path.pop(0)
 
     return 0

@@ -57,7 +57,10 @@ CLI
 ---
 
 Specify one or more target functions with ``-t``, then what to run: a script file by filename, or a module with ``-m`` then its name.
-Any extra arguments are passed to the script or module.
+Any unrecognized arguments are passed to the script or module.
+
+Use the format ``<module>:<function>`` to specify target functions.
+When using ``-m`` with a module, you can skip the ``<module>`` part and it will be inferred from the module name.
 
 .. code-block:: console
 
@@ -91,7 +94,7 @@ Full help:
 
 .. code-block:: console
 
-   usage: tprof [-h] -t target (-m module | script) ...
+   usage: tprof [-h] -t target [--compare] (-m module | script) ...
 
    positional arguments:
      script      Python script to run
@@ -100,15 +103,49 @@ Full help:
    options:
      -h, --help  show this help message and exit
      -t target   Target callable to profile (format: module:function).
+     --compare   Compare performance of targets, with the first as baseline.
      -m module   Run library module as a script (like python -m)
 
 .. [[[end]]]
 
+Comparison mode
+^^^^^^^^^^^^^^^
+
+Pass ``--compare`` to compare the performance of multiple target functions, with the first as the baseline, in an extra “delta” column.
+For example, given this code:
+
+.. code-block:: python
+
+    def before():
+        total = 0
+        for i in range(100_000):
+            total += i
+        return total
+
+
+    def after():
+        return sum(range(100_000))
+
+
+    for _ in range(100):
+        before()
+        after()
+
+…you can run tprof like this to compare the two functions:
+
+.. code-block:: console
+
+    $ tprof --compare -t before -t after -m example
+    🎯 tprof results:
+     function         calls total  mean ± σ      min … max   delta
+     example:before()   100 227ms   2ms ± 34μs   2ms … 2ms   -
+     example:after()    100  86ms 856μs ± 15μs 835μs … 910μs -62.27%
+
 API
 ---
 
-``tprof(*targets, label: str | None = None)``
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+``tprof(*targets, label: str | None = None, compare: bool = False)``
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Use this context manager / decorator within your code to perform profiling in a specific block.
 The report is printed when the block ends, each time it ends.
@@ -120,32 +157,61 @@ __ https://docs.python.org/3.14/library/pkgutil.html#pkgutil.resolve_name
 
 ``label`` is an optional string to add to the report heading to distinguish multiple reports.
 
-For example:
+Set ``compare`` to ``True`` to enable comparison mode, as documented above in the CLI section.
+
+For example, given this code:
+
+.. code-block:: python
+
+    from lib import maths
+
+    from tprof import tprof
+
+    print("Doing the maths…")
+    with tprof(maths):
+        maths()
+    print("The maths has been done!")
+
+…running it would produce output like:
+
+.. code-block:: console
+
+    $ python example.py
+    Doing the maths…
+    🎯 tprof results:
+     function    calls total  mean ± σ   min … max
+     lib:maths()     1 305ms 305ms     305ms … 305ms
+    The maths has been done!
+
+Another example using comparison mode:
 
 .. code-block:: python
 
     from tprof import tprof
 
-    from lib import maths
+
+    def before():
+        total = 0
+        for i in range(100_000):
+            total += i
+        return total
 
 
-    def main():
-        with tprof(maths):
-            ...
-            maths()
-            ...
+    def after():
+        return sum(range(100_000))
 
 
-    if __name__ == "__main__":
-        main()
+    with tprof(before, after, compare=True):
+        for _ in range(100):
+            before()
+            after()
 
-…which will look like this when run:
+…which produces output like:
 
 .. code-block:: console
 
-    $ python example2.py
-    Doing maths
-    And again
+    $ python example.py
     🎯 tprof results:
-     function         calls total  mean ± σ     min … max
-     __main__:maths()     2 608ms 304ms ± 2ms 303ms … 305ms
+     function          calls total  mean ± σ      min … max delta
+     __main__:before()   100 227ms   2ms ± 83μs   2ms … 3ms -
+     __main__:after()    100  85ms 853μs ± 22μs 835μs … 1ms -62.35%

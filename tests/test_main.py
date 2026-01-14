@@ -89,10 +89,7 @@ def test_main_module(tmp_path, capsys):
     )
 
     try:
-        with (
-            chdir(tmp_path),
-            mock.patch.object(sys, "path", [str(tmp_path), *sys.path]),
-        ):
+        with chdir(tmp_path):
             result = main(["-t", "pathlib:Path.__new__", "-m", "example"])
     finally:
         sys.modules.pop("example", None)
@@ -105,3 +102,41 @@ def test_main_module(tmp_path, capsys):
     assert errlines[0] == "🎯 tprof results:"
     assert errlines[1].startswith(" function")
     assert errlines[2].startswith(" pathlib:Path.__new__() ")
+
+
+def test_main_compare(tmp_path, capsys):
+    path = tmp_path / "example.py"
+    path.write_text(
+        dedent(
+            """\
+            def before():
+                pass
+
+            def after():
+                pass
+
+            for _ in range(100):
+                before()
+                after()
+            """
+        )
+    )
+
+    try:
+        with chdir(tmp_path):
+            result = main(["--compare", "-t", "before", "-t", "after", "-m", "example"])
+    finally:
+        sys.modules.pop("example", None)
+
+    assert result == 0
+    out, err = capsys.readouterr()
+    assert out == ""
+    errlines = err.splitlines()
+    assert len(errlines) == 4
+    assert errlines[0] == "🎯 tprof results:"
+    assert errlines[1].startswith(" function")
+    assert errlines[1].rstrip().endswith(" delta")
+    assert errlines[2].startswith(" example:before() ")
+    assert errlines[2].rstrip().endswith(" -")
+    assert errlines[3].startswith(" example:after() ")
+    assert errlines[3].rstrip().endswith("%")
