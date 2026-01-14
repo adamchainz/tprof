@@ -27,9 +27,9 @@ py_start_callback(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
     PyObject *code = args[0];
     RecordModuleState *state = get_module_state(module);
 
-    int contains = PyDict_Contains(state->enter_times, code);
-    if (contains <= 0) {
-        if (contains < 0) {
+    PyObject *times_list = PyDict_GetItemWithError(state->enter_times, code);
+    if (times_list == NULL) {
+        if (PyErr_Occurred()) {
             return NULL;
         }
         Py_RETURN_NONE;
@@ -37,12 +37,6 @@ py_start_callback(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 
     PyObject *timestamp = PyObject_CallNoArgs(state->perf_counter_ns);
     if (timestamp == NULL) {
-        return NULL;
-    }
-
-    PyObject *times_list = PyDict_GetItem(state->enter_times, code);
-    if (times_list == NULL) {
-        Py_DECREF(timestamp);
         return NULL;
     }
 
@@ -66,17 +60,12 @@ py_end_callback(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
     PyObject *code = args[0];
     RecordModuleState *state = get_module_state(module);
 
-    int contains = PyDict_Contains(state->enter_times, code);
-    if (contains <= 0) {
-        if (contains < 0) {
+    PyObject *times_list = PyDict_GetItemWithError(state->enter_times, code);
+    if (times_list == NULL) {
+        if (PyErr_Occurred()) {
             return NULL;
         }
         Py_RETURN_NONE;
-    }
-
-    PyObject *times_list = PyDict_GetItem(state->enter_times, code);
-    if (times_list == NULL) {
-        return NULL;
     }
 
     Py_ssize_t list_len = PyList_Size(times_list);
@@ -111,10 +100,13 @@ py_end_callback(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
         return NULL;
     }
 
-    PyObject *call_times_list = PyDict_GetItem(state->call_times, code);
+    PyObject *call_times_list = PyDict_GetItemWithError(state->call_times, code);
     if (call_times_list == NULL) {
         Py_DECREF(duration);
-        return NULL;
+        if (PyErr_Occurred()) {
+            return NULL;
+        }
+        Py_RETURN_NONE;
     }
 
     int result = PyList_Append(call_times_list, duration);
