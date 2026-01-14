@@ -22,6 +22,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="Target callable to profile (format: module:function).",
     )
     parser.add_argument(
+        "-x",
         "--compare",
         action="store_true",
         help="Compare performance of targets, with the first as baseline.",

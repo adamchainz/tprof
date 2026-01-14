@@ -98,24 +98,24 @@ Full help:
 
 .. code-block:: console
 
-   usage: tprof [-h] -t target [--compare] (-m module | script) ...
+   usage: tprof [-h] -t target [-x] (-m module | script) ...
 
    positional arguments:
-     script      Python script to run
-     args        Arguments to pass to the script or module
+     script         Python script to run
+     args           Arguments to pass to the script or module
 
    options:
-     -h, --help  show this help message and exit
-     -t target   Target callable to profile (format: module:function).
-     --compare   Compare performance of targets, with the first as baseline.
-     -m module   Run library module as a script (like python -m)
+     -h, --help     show this help message and exit
+     -t target      Target callable to profile (format: module:function).
+     -x, --compare  Compare performance of targets, with the first as baseline.
+     -m module      Run library module as a script (like python -m)
 
 .. [[[end]]]
 
 Comparison mode
 ^^^^^^^^^^^^^^^
 
-Pass ``--compare`` to compare the performance of multiple target functions, with the first as the baseline, in an extra “delta” column.
+Pass ``-x`` (``--compare``) to compare the performance of multiple target functions, with the first as the baseline, in an extra “delta” column.
 For example, given this code:
 
 .. code-block:: python
@@ -139,7 +139,7 @@ For example, given this code:
 
 .. code-block:: console
 
-    $ tprof --compare -t before -t after -m example
+    $ tprof -x -t before -t after -m example
     🎯 tprof results:
      function         calls total  mean ± σ      min … max   delta
      example:before()   100 227ms   2ms ± 34μs   2ms … 2ms   -

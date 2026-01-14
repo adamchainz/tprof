@@ -159,7 +159,7 @@ def test_main_compare(tmp_path, capsys):
 
     try:
         with chdir(tmp_path):
-            result = main(["--compare", "-t", "before", "-t", "after", "-m", "example"])
+            result = main(["-x", "-t", "before", "-t", "after", "-m", "example"])
     finally:
         sys.modules.pop("example", None)
 
