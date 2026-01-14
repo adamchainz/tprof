@@ -184,7 +184,7 @@ wheels = [
 
 [[package]]
 name = "tprof"
-version = "0.0.0"
+version = "1.0.0"
 source = { editable = "." }
 dependencies = [
     { name = "rich" },
@@ -203,7 +203,7 @@ requires-dist = [{ name = "rich", specifier = ">=14.2" }]
 
 [package.metadata.requires-dev]
 test = [
-    { name = "cogapp", specifier = ">=3.6.0" },
+    { name = "cogapp", specifier = ">=3.6" },
     { name = "coverage", extras = ["toml"] },
     { name = "pytest" },
     { name = "pytest-randomly" },
