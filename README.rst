@@ -50,6 +50,7 @@ Usage
 
 tprof measures the time spent in specified target functions when running a script or module.
 Unlike a full program profiler, it only tracks the specified functions using |sys.monitoring|__ (new in Python 3.12), reducing overhead and helping you focus on the bits you’re changing.
+Timing is done in C to further reduce overhead.
 
 .. |sys.monitoring| replace:: ``sys.monitoring``
 __ https://docs.python.org/3/library/sys.html#sys.monitoring
