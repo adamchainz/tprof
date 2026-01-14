@@ -231,7 +231,10 @@ When optimizing Python code, I found I was using this workflow:
 4. Re-profile the whole program to see if the changes helped.
 
 This works fined but profiling the whole program again adds overhead, and picking out the one function’s stats from the report is extra work.
-When I saw that Python 3.12’s |sys.monitoring|__ allows tracking specific functions with low overhead, I created tprof to streamline this workflow, allowing the final step to re-profile just the target function.
+When I saw that Python 3.12’s |sys.monitoring2|__ allows tracking specific functions with low overhead, I created tprof to streamline this workflow, allowing the final step to re-profile just the target function.
+
+.. |sys.monitoring2| replace:: ``sys.monitoring``
+__ https://docs.python.org/3/library/sys.html#sys.monitoring
 
 It also seemed a natural extension that tprof could compare multiple functions, supporting a nice microbenchmarking workflow.
 
