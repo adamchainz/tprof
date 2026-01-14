@@ -17,7 +17,11 @@ TOOL_NAME = "tprof"
 
 
 @contextmanager
-def tprof(*targets: Any, label: str | None = None) -> Generator[None]:
+def tprof(
+    *targets: Any,
+    label: str | None = None,
+    compare: bool = False,
+) -> Generator[None]:
     """
     Profile time spent in target callables and print a report when done.
     """
@@ -121,14 +125,41 @@ def tprof(*targets: Any, label: str | None = None) -> Generator[None]:
         table.add_column("min", header_style="cyan", justify="right")
         table.add_column("…", justify="right")
         table.add_column("max", header_style="magenta", justify="left")
+        if compare:
+            table.add_column("delta")
+
+        baseline: float | None = None
+        first = True
 
         for code, times in call_times.items():
+            mean_times = mean(times) if times else 0.0
+
+            if not compare:
+                delta: tuple[str, ...] = ()
+            else:
+                if first:
+                    delta = ("[dim]-[/dim]",)
+                    if times:
+                        baseline = mean_times
+                else:
+                    if not baseline:
+                        delta = ("[dim]n/a[/dim]",)
+                    else:
+                        percent_diff = ((mean_times - baseline) / baseline) * 100
+                        colour = (
+                            "bold bright_green"
+                            if percent_diff <= 0
+                            else "bold bright_red"
+                        )
+                        delta = (f"[{colour}]{percent_diff:+.2f}%[/{colour}]",)
+
+            first = False
             table.add_row(
                 f"[bold]{code_to_name[code]}()[/bold]",
                 str(len(times)),
                 _format_time(sum(times), None),
                 (
-                    _format_time(int(mean(times)), "bright_green")
+                    _format_time(int(mean_times), "bright_green")
                     if times
                     else "[dim]n/a[/dim]"
                 ),
@@ -139,6 +170,7 @@ def tprof(*targets: Any, label: str | None = None) -> Generator[None]:
                 _format_time(min(times), "cyan") if times else "[dim]n/a[/dim]",
                 "…",
                 _format_time(max(times), "magenta") if times else "[dim]n/a[/dim]",
+                *delta,
             )
         rich.print(table, file=sys.stderr)
 

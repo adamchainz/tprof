@@ -151,6 +151,59 @@ class TestTprof:
             " tests.test_api:TestTprof.test_custom_label.<locals>.sample() "
         )
 
+    def test_compare(self, capsys):
+        def before() -> int:
+            return 1
+
+        def after() -> int:
+            return 2
+
+        with tprof(before, after, compare=True):
+            before()
+            after()
+
+        out, err = capsys.readouterr()
+        assert out == ""
+        errlines = err.splitlines()
+        assert len(errlines) == 4
+        assert errlines[0].startswith("🎯 tprof results:")
+        assert errlines[1].startswith(" function")
+        assert errlines[1].rstrip().endswith(" delta")
+        assert errlines[2].startswith(
+            " tests.test_api:TestTprof.test_compare.<locals>.before() "
+        )
+        assert errlines[2].rstrip().endswith(" -")
+        assert errlines[3].startswith(
+            " tests.test_api:TestTprof.test_compare.<locals>.after() "
+        )
+        assert errlines[3].rstrip().endswith("%")
+
+    def test_compare_no_baseline(self, capsys):
+        def before() -> int:  # pragma: no cover
+            return 1
+
+        def after() -> int:
+            return 2
+
+        with tprof(before, after, compare=True):
+            after()
+
+        out, err = capsys.readouterr()
+        assert out == ""
+        errlines = err.splitlines()
+        assert len(errlines) == 4
+        assert errlines[0].startswith("🎯 tprof results:")
+        assert errlines[1].startswith(" function")
+        assert errlines[1].rstrip().endswith(" delta")
+        assert errlines[2].startswith(
+            " tests.test_api:TestTprof.test_compare_no_baseline.<locals>.before() "
+        )
+        assert errlines[2].rstrip().endswith(" -")
+        assert errlines[3].startswith(
+            " tests.test_api:TestTprof.test_compare_no_baseline.<locals>.after() "
+        )
+        assert errlines[3].rstrip().endswith(" n/a")
+
 
 class TestFormatTime:
     def test_ns_no_colour(self):
