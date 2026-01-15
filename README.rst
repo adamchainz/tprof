@@ -238,4 +238,4 @@ __ https://docs.python.org/3/library/sys.html#sys.monitoring
 
 It also seemed a natural extension that tprof could compare multiple functions, supporting a nice microbenchmarking workflow.
 
-Output inspired by `poop <https://github.com/andrewrk/poop>`__.
+Output inspired by `poop <https://github.com/andrewrk/poop>`__ and formatted nicely with `Rich <https://github.com/Textualize/rich#readme>`__.
