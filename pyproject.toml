@@ -47,6 +47,12 @@ test = [
   "pytest",
   "pytest-randomly",
 ]
+build = [
+  "cibuildwheel>=3.3.1",
+]
+
+[tool.uv.dependency-groups]
+build = { requires-python = ">=3.14" }
 
 [tool.cibuildwheel]
 build = [
