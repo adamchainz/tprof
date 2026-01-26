@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import NoReturn
+
 import pytest
 
 from tprof import tprof
@@ -86,6 +88,17 @@ class TestTprof:
         assert errlines[2].startswith(
             " tests.test_api:TestTprof.test_raises.<locals>.sample() "
         )
+
+    def test_raises_uncaught(self, capsys):
+        def woops() -> NoReturn:
+            raise ValueError("Something went wrong!")
+
+        with pytest.raises(ValueError, match="Something went wrong!"), tprof(woops):
+            woops()
+
+        out, err = capsys.readouterr()
+        assert out == ""
+        assert err == ""
 
     def test_recursive(self, capsys):
         def factorial(n: int) -> int:
