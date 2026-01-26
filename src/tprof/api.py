@@ -17,7 +17,7 @@ TOOL_NAME = "tprof"
 console = Console(stderr=True)
 
 code_to_name: dict[CodeType, str] = {}
-enter_times: dict[CodeType, list[int]] = {}
+enter_times: dict[tuple[CodeType, int], list[int]] = {}
 call_times: dict[CodeType, list[int]] = {}
 
 
@@ -57,7 +57,6 @@ def tprof(
                 name = f"<unknown>:{base_name}"
 
         code_to_name[code] = name
-        enter_times[code] = []
         call_times[code] = []
 
     sys.monitoring.use_tool_id(TOOL_ID, TOOL_NAME)
