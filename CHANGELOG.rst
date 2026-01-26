@@ -2,6 +2,9 @@
 Changelog
 =========
 
+1.1.0 (2026-01-26)
+------------------
+
 * Skip reporting statistics when an exception occurs.
 
   `Issue #15 <https://github.com/adamchainz/tprof/issues/15>`__.
