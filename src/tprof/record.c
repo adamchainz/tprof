@@ -1,5 +1,6 @@
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
+#include <pythread.h>
 
 typedef struct {
     PyObject *enter_times;
@@ -26,17 +27,43 @@ py_start_callback(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
     PyObject *code = args[0];
     RecordModuleState *state = get_module_state(module);
 
-    PyObject *times_list = PyDict_GetItemWithError(state->enter_times, code);
+    unsigned long thread_id = PyThread_get_thread_ident();
+    PyObject *thread_id_obj = PyLong_FromUnsignedLong(thread_id);
+    if (thread_id_obj == NULL) {
+        return NULL;
+    }
+
+    PyObject *key = PyTuple_Pack(2, code, thread_id_obj);
+    Py_DECREF(thread_id_obj);
+    if (key == NULL) {
+        return NULL;
+    }
+
+    PyObject *times_list = PyDict_GetItemWithError(state->enter_times, key);
     if (times_list == NULL) {
         if (PyErr_Occurred()) {
+            Py_DECREF(key);
             return NULL;
         }
-        Py_RETURN_NONE;
+        times_list = PyList_New(0);
+        if (times_list == NULL) {
+            Py_DECREF(key);
+            return NULL;
+        }
+        if (PyDict_SetItem(state->enter_times, key, times_list) < 0) {
+            Py_DECREF(times_list);
+            Py_DECREF(key);
+            return NULL;
+        }
     }
-    Py_INCREF(times_list);
+    else {
+        Py_INCREF(times_list);
+    }
+    Py_DECREF(key);
 
     PyObject *timestamp = PyObject_CallNoArgs(state->perf_counter_ns);
     if (timestamp == NULL) {
+        Py_DECREF(times_list);
         return NULL;
     }
 
@@ -61,7 +88,20 @@ py_end_callback(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
     PyObject *code = args[0];
     RecordModuleState *state = get_module_state(module);
 
-    PyObject *times_list = PyDict_GetItemWithError(state->enter_times, code);
+    unsigned long thread_id = PyThread_get_thread_ident();
+    PyObject *thread_id_obj = PyLong_FromUnsignedLong(thread_id);
+    if (thread_id_obj == NULL) {
+        return NULL;
+    }
+
+    PyObject *key = PyTuple_Pack(2, code, thread_id_obj);
+    Py_DECREF(thread_id_obj);
+    if (key == NULL) {
+        return NULL;
+    }
+
+    PyObject *times_list = PyDict_GetItemWithError(state->enter_times, key);
+    Py_DECREF(key);
     if (times_list == NULL) {
         if (PyErr_Occurred()) {
             return NULL;

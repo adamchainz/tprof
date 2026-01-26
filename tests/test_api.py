@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import time
+from concurrent.futures import ThreadPoolExecutor
 from typing import NoReturn
 
 import pytest
@@ -216,6 +218,30 @@ class TestTprof:
             " tests.test_api:TestTprof.test_compare_no_baseline.<locals>.after() "
         )
         assert errlines[3].rstrip().endswith(" n/a")
+
+    def test_threaded(self, capsys):
+        def worker() -> None:
+            time.sleep(0.01)
+
+        def main() -> None:
+            with ThreadPoolExecutor(max_workers=5) as executor:
+                futures = [executor.submit(worker) for _ in range(5)]
+                for future in futures:
+                    future.result()
+
+        with tprof(worker):
+            main()
+
+        out, err = capsys.readouterr()
+        assert out == ""
+        errlines = err.splitlines()
+        assert len(errlines) == 3
+        assert errlines[0].startswith("🎯 tprof results:")
+        assert errlines[1].startswith(" function")
+        assert errlines[2].startswith(
+            " tests.test_api:TestTprof.test_threaded.<locals>.worker() "
+        )
+        assert " 5 " in errlines[2]
 
 
 class TestFormatTime:
