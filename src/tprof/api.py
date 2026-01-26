@@ -80,8 +80,12 @@ def tprof(
         ),
     )
 
+    exc = False
     try:
         yield
+    except Exception:
+        exc = True
+        raise
     finally:
         sys.monitoring.set_events(TOOL_ID, sys.monitoring.events.NO_EVENTS)
         sys.monitoring.register_callback(TOOL_ID, sys.monitoring.events.PY_START, None)
@@ -89,75 +93,76 @@ def tprof(
         sys.monitoring.register_callback(TOOL_ID, sys.monitoring.events.PY_UNWIND, None)
         sys.monitoring.free_tool_id(TOOL_ID)
 
-        heading = "[bold red]🎯 tprof[/bold red] results"
-        if label:
-            heading += f" @ [bold bright_blue]{label}[/bold bright_blue]"
-        heading += ":"
-        console.print(heading)
-
-        table = Table(box=None, collapse_padding=True)
-
-        table.add_column("function")
-        table.add_column("calls", justify="right")
-        table.add_column("total", justify="right")
-        table.add_column("mean", header_style="bright_green", justify="right")
-        table.add_column("±", justify="right")
-        table.add_column("σ", header_style="bright_green", justify="left")
-        table.add_column("min", header_style="cyan", justify="right")
-        table.add_column("…", justify="right")
-        table.add_column("max", header_style="magenta", justify="left")
-        if compare:
-            table.add_column("delta")
-
-        baseline: float | None = None
-        first = True
-
-        for code, times in call_times.items():
-            mean_times = mean(times) if times else 0.0
-
-            if not compare:
-                delta: tuple[str, ...] = ()
-            else:
-                if first:
-                    delta = ("[dim]-[/dim]",)
-                    if times:
-                        baseline = mean_times
-                else:
-                    if not baseline:
-                        delta = ("[dim]n/a[/dim]",)
-                    else:
-                        percent_diff = ((mean_times - baseline) / baseline) * 100
-                        colour = (
-                            "bold bright_green"
-                            if percent_diff <= 0
-                            else "bold bright_red"
-                        )
-                        delta = (f"[{colour}]{percent_diff:+.2f}%[/{colour}]",)
-
-            first = False
-            table.add_row(
-                f"[bold]{code_to_name[code]}()[/bold]",
-                str(len(times)),
-                _format_time(sum(times), None),
-                (
-                    _format_time(int(mean_times), "bright_green")
-                    if times
-                    else "[dim]n/a[/dim]"
-                ),
-                "±" if len(times) > 1 else "",
-                _format_time(int(stdev(times)), "bright_green")
-                if len(times) > 1
-                else "",
-                _format_time(min(times), "cyan") if times else "[dim]n/a[/dim]",
-                "…",
-                _format_time(max(times), "magenta") if times else "[dim]n/a[/dim]",
-                *delta,
-            )
-        console.print(table)
+        if not exc:
+            display_report(label=label, compare=compare)
 
         code_to_name.clear()
         enter_times.clear()
         call_times.clear()
+
+
+def display_report(label: str | None = None, compare: bool = False) -> None:
+    heading = "[bold red]🎯 tprof[/bold red] results"
+    if label:
+        heading += f" @ [bold bright_blue]{label}[/bold bright_blue]"
+    heading += ":"
+    console.print(heading)
+
+    table = Table(box=None, collapse_padding=True)
+
+    table.add_column("function")
+    table.add_column("calls", justify="right")
+    table.add_column("total", justify="right")
+    table.add_column("mean", header_style="bright_green", justify="right")
+    table.add_column("±", justify="right")
+    table.add_column("σ", header_style="bright_green", justify="left")
+    table.add_column("min", header_style="cyan", justify="right")
+    table.add_column("…", justify="right")
+    table.add_column("max", header_style="magenta", justify="left")
+    if compare:
+        table.add_column("delta")
+
+    baseline: float | None = None
+    first = True
+
+    for code, times in call_times.items():
+        mean_times = mean(times) if times else 0.0
+
+        if not compare:
+            delta: tuple[str, ...] = ()
+        else:
+            if first:
+                delta = ("[dim]-[/dim]",)
+                if times:
+                    baseline = mean_times
+            else:
+                if not baseline:
+                    delta = ("[dim]n/a[/dim]",)
+                else:
+                    percent_diff = ((mean_times - baseline) / baseline) * 100
+                    colour = (
+                        "bold bright_green" if percent_diff <= 0 else "bold bright_red"
+                    )
+                    delta = (f"[{colour}]{percent_diff:+.2f}%[/{colour}]",)
+
+        first = False
+        table.add_row(
+            f"[bold]{code_to_name[code]}()[/bold]",
+            str(len(times)),
+            _format_time(sum(times), None),
+            (
+                _format_time(int(mean_times), "bright_green")
+                if times
+                else "[dim]n/a[/dim]"
+            ),
+            "±" if len(times) > 1 else "",
+            _format_time(int(stdev(times)), "bright_green") if len(times) > 1 else "",
+            _format_time(min(times), "cyan") if times else "[dim]n/a[/dim]",
+            "…",
+            _format_time(max(times), "magenta") if times else "[dim]n/a[/dim]",
+            *delta,
+        )
+    console.print(table)
 
 
 def _format_time(ns: int, colour: str | None) -> str:
