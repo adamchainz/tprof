@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import sys
-from collections.abc import Generator
+from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from pkgutil import resolve_name
 from statistics import mean, stdev
 from types import CodeType
-from typing import Any, Callable
+from typing import Any
 
 from rich.console import Console
 from rich.table import Table
@@ -26,7 +26,8 @@ def tprof(
     *targets: Any,
     label: str | None = None,
     compare: bool = False,
-    call_times_callback: Callable[[str | None, dict[CodeType, list[int]]], None] | None = None
+    call_times_callback: Callable[[str | None, dict[CodeType, list[int]]], None]
+    | None = None,
 ) -> Generator[None]:
     """
     Profile time spent in target callables and print a report when done.
