@@ -1,7 +1,9 @@
+# python
 import time
+from typing import Optional
+from types import CodeType
 
 from tprof import tprof
-from tprof.api import CodeType
 
 test_name = "test_callback"
 
@@ -11,8 +13,7 @@ delay_sec = expected_ns / 1E9
 expected_function_names = ["sample_a", "sample_b"]
 
 
-
-def call_times_callback(label: str, call_times: CodeType):
+def call_times_callback(label: Optional[str], call_times: dict[CodeType, list[int]]) -> None:
     assert label == test_name
     function_names = []
     for code_type, times in call_times.items():
@@ -27,14 +28,17 @@ def sample_a() -> int:
     time.sleep(delay_sec)
     return 42
 
+
 def sample_b() -> int:
     time.sleep(delay_sec)
     return 43
+
 
 def main() -> None:
     sample_a()
     sample_b()
 
-def test_callback():
+
+def test_callback() -> None:
     with tprof(sample_a, sample_b, label=test_name, call_times_callback=call_times_callback):
         main()
