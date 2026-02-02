@@ -6,7 +6,7 @@ from contextlib import contextmanager
 from pkgutil import resolve_name
 from statistics import mean, stdev
 from types import CodeType
-from typing import Any
+from typing import Any, Callable
 
 from rich.console import Console
 from rich.table import Table
@@ -26,6 +26,7 @@ def tprof(
     *targets: Any,
     label: str | None = None,
     compare: bool = False,
+    call_times_callback: Callable[[str | None, dict[CodeType, list[int]]], None] | None = None
 ) -> Generator[None]:
     """
     Profile time spent in target callables and print a report when done.
@@ -93,7 +94,10 @@ def tprof(
         sys.monitoring.free_tool_id(TOOL_ID)
 
         if not exc:
-            display_report(label=label, compare=compare)
+            if call_times_callback is None:
+                display_report(label=label, compare=compare)
+            else:
+                call_times_callback(label, call_times)
 
         code_to_name.clear()
         enter_times.clear()
