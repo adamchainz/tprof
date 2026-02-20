@@ -252,22 +252,34 @@ class TestFormatTime:
         assert _format_time(999, "red") == "[red]999[/red]ns"
 
     def test_us_no_colour(self):
-        assert _format_time(1_500, None) == "2μs"
+        assert _format_time(1_500, None) == "1.50μs"
 
     def test_us_with_colour(self):
-        assert _format_time(1_500, "green") == "[green]2[/green]μs"
+        assert _format_time(1_500, "green") == "[green]1.50[/green]μs"
+
+    def test_us_10_100_range(self):
+        assert _format_time(50_000, None) == "50.0μs"
 
     def test_ms_no_colour(self):
-        assert _format_time(2_500_000, None) == "2ms"
+        assert _format_time(2_500_000, None) == "2.50ms"
 
     def test_ms_with_colour(self):
-        assert _format_time(2_500_000, "blue") == "[blue]2[/blue]ms"
+        assert _format_time(2_500_000, "blue") == "[blue]2.50[/blue]ms"
+
+    def test_ms_10_100_range(self):
+        assert _format_time(50_000_000, None) == "50.0ms"
+
+    def test_ms_100_plus(self):
+        assert _format_time(500_000_000, None) == "500ms"
 
     def test_s_no_colour(self):
-        assert _format_time(3_500_000_000, None) == "4s "
+        assert _format_time(3_500_000_000, None) == "3.50s "
 
     def test_s_with_colour(self):
-        assert _format_time(3_500_000_000, "yellow") == "[yellow]4[/yellow]s "
+        assert _format_time(3_500_000_000, "yellow") == "[yellow]3.50[/yellow]s "
+
+    def test_s_10_100_range(self):
+        assert _format_time(50_000_000_000, None) == "50.0s "
 
     def test_big_s_no_colour(self):
         assert _format_time(12_345_678_901_234, None) == "12,346s "
