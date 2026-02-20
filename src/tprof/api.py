@@ -165,18 +165,36 @@ def display_report(label: str | None = None, compare: bool = False) -> None:
 
 
 def _format_time(ns: int, colour: str | None) -> str:
-    """Format time in nanoseconds to appropriate scale with comma separators."""
+    """Format time in nanoseconds to appropriate scale with at least 3 significant digits."""
     if ns < 1_000:
         value = str(ns)
         suffix = "ns"
     elif ns < 1_000_000:
-        value = f"{ns / 1_000:.0f}"
+        us = ns / 1_000
+        if us < 10:
+            value = f"{us:.2f}"
+        elif us < 100:
+            value = f"{us:.1f}"
+        else:
+            value = f"{us:.0f}"
         suffix = "μs"
     elif ns < 1_000_000_000:
-        value = f"{ns / 1_000_000:.0f}"
+        ms = ns / 1_000_000
+        if ms < 10:
+            value = f"{ms:.2f}"
+        elif ms < 100:
+            value = f"{ms:.1f}"
+        else:
+            value = f"{ms:,.0f}"
         suffix = "ms"
     else:
-        value = f"{ns / 1_000_000_000:,.0f}"
+        s = ns / 1_000_000_000
+        if s < 10:
+            value = f"{s:.2f}"
+        elif s < 100:
+            value = f"{s:.1f}"
+        else:
+            value = f"{s:,.0f}"
         suffix = "s "
 
     if colour:

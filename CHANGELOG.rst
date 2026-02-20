@@ -2,6 +2,10 @@
 Changelog
 =========
 
+* Format time output to at least three significant digits.
+
+  `PR #28 <https://github.com/adamchainz/tprof/issues/28>`__.
+
 1.1.0 (2026-01-26)
 ------------------
 
