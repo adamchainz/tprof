@@ -51,8 +51,8 @@ build = [
   "cibuildwheel>=3.3.1",
 ]
 
-[tool.uv.dependency-groups]
-build = { requires-python = ">=3.14" }
+[tool.uv]
+dependency-groups.build = { requires-python = ">=3.14" }
 
 [tool.cibuildwheel]
 archs = [ "auto64" ]
@@ -110,32 +110,28 @@ lint.isort.required-imports = [ "from __future__ import annotations" ]
 [tool.pyproject-fmt]
 max_supported_python = "3.14"
 
-[tool.pytest.ini_options]
-addopts = """\
+[tool.pytest]
+ini_options.addopts = """\
     --strict-config
     --strict-markers
     """
-xfail_strict = true
+ini_options.xfail_strict = true
 
-[tool.coverage.paths]
-source = [
+[tool.coverage]
+run.branch = true
+run.parallel = true
+run.source = [
+  "tests",
+  "tprof",
+]
+paths.source = [
   "src",
   ".tox/**/site-packages",
 ]
-
-[tool.coverage.report]
-show_missing = true
-exclude_also = [
+report.exclude_also = [
   "if TYPE_CHECKING:",
 ]
-
-[tool.coverage.run]
-branch = true
-parallel = true
-source = [
-  "tprof",
-  "tests",
-]
+report.show_missing = true
 
 [tool.mypy]
 enable_error_code = [
@@ -147,10 +143,7 @@ mypy_path = "src/"
 namespace_packages = false
 strict = true
 warn_unreachable = true
-
-[[tool.mypy.overrides]]
-module = "tests.*"
-allow_untyped_defs = true
+overrides = [ { module = "tests.*", allow_untyped_defs = true } ]
 
 [tool.rstcheck]
 report_level = "ERROR"
