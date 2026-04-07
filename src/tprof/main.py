@@ -12,7 +12,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         argv = sys.argv[1:]
 
     parser = argparse.ArgumentParser(prog="tprof", allow_abbrev=False)
-    parser.suggest_on_error = True  # type: ignore[attr-defined]
+    parser.suggest_on_error = True
     parser.add_argument(
         "-t",
         metavar="target",
