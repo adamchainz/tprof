@@ -364,7 +364,7 @@ requires-dist = [{ name = "rich", specifier = ">=14.2" }]
 build = [{ name = "cibuildwheel", marker = "python_full_version >= '3.14'", specifier = ">=3.3.1" }]
 test = [
     { name = "cogapp", specifier = ">=3.6" },
-    { name = "coverage", extras = ["toml"] },
+    { name = "coverage", extras = ["toml"], specifier = ">=7.10" },
     { name = "pytest" },
     { name = "pytest-randomly" },
 ]
