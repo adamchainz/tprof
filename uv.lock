@@ -365,7 +365,7 @@ build = [{ name = "cibuildwheel", marker = "python_full_version >= '3.14'", spec
 test = [
     { name = "cogapp", specifier = ">=3.6" },
     { name = "coverage", extras = ["toml"], specifier = ">=7.10" },
-    { name = "pytest" },
+    { name = "pytest", specifier = ">=9" },
     { name = "pytest-randomly" },
 ]
 
