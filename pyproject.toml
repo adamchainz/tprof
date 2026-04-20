@@ -44,7 +44,7 @@ scripts.tprof = "tprof.main:main"
 test = [
   "cogapp>=3.6",
   "coverage[toml]>=7.10",
-  "pytest",
+  "pytest>=9",
   "pytest-randomly",
 ]
 build = [
@@ -123,11 +123,7 @@ warn_unreachable = true
 overrides = [ { module = "tests.*", allow_untyped_defs = true } ]
 
 [tool.pytest]
-ini_options.addopts = """\
-    --strict-config
-    --strict-markers
-    """
-ini_options.xfail_strict = true
+strict = true
 
 [tool.coverage]
 run.branch = true
