@@ -2,6 +2,10 @@
 Changelog
 =========
 
+* Build with frame pointers enabled, preparation for `PEP 831 <https://peps.python.org/pep-0831/>`__.
+
+  `PR #40 <https://github.com/adamchainz/tprof/issues/40>`__.
+
 1.2.0 (2026-02-20)
 ------------------
 
