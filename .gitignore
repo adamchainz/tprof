@@ -6,3 +6,5 @@
 /.tox
 /build/
 /dist/
+*.pyd
+.idea/
