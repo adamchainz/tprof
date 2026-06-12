@@ -55,7 +55,6 @@ build = [
 dependency-groups.build = { requires-python = ">=3.14" }
 
 [tool.cibuildwheel]
-archs = [ "auto64" ]
 build = [
   "cp314-*",
   "cp314t-*",
@@ -65,6 +64,7 @@ build = [
   "cp311-*",
   "cp310-*",
 ]
+archs = [ "auto64" ]
 enable = [
   # Enable free-threaded wheels on Python 3.13 (where it was experimental)
   "cpython-freethreading",
@@ -111,15 +111,15 @@ lint.isort.required-imports = [ "from __future__ import annotations" ]
 max_supported_python = "3.14"
 
 [tool.mypy]
+mypy_path = "src/"
+namespace_packages = false
+warn_unreachable = true
 enable_error_code = [
   "ignore-without-code",
   "redundant-expr",
   "truthy-bool",
 ]
-mypy_path = "src/"
-namespace_packages = false
 strict = true
-warn_unreachable = true
 overrides = [ { module = "tests.*", allow_untyped_defs = true } ]
 
 [tool.pytest]
