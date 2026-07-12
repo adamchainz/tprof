@@ -2,6 +2,15 @@
 Changelog
 =========
 
+* Reduce profiling overhead by storing start and elapsed times in C data
+  structures rather than Python dicts, lists, and ints, computing report
+  statistics in C, and disabling monitoring events for non-target code.
+  Approximately: recording overhead dropped threefold, to ~140ns per profiled
+  call on Python 3.13, non-target function calls are no longer slowed at all
+  (previously ~400ns each), memory use dropped fourfold, to 8 bytes per
+  recorded call, and report calculation dropped from ~430ms to ~3ms per
+  million recorded calls.
+
 * Build with frame pointers enabled, preparation for `PEP 831 <https://peps.python.org/pep-0831/>`__.
 
   `PR #40 <https://github.com/adamchainz/tprof/issues/40>`__.
