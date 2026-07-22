@@ -2,6 +2,9 @@
 Changelog
 =========
 
+* Report the median rather than the mean, since it is more robust to
+  outliers. Comparison mode deltas are now computed from medians too.
+
 * Reduce profiling overhead by storing start and elapsed times in C data
   structures rather than Python dicts, lists, and ints, computing report
   statistics in C, and disabling monitoring events for non-target code.
