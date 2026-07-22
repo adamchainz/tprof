@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import asyncio
 import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import NoReturn
 
 import pytest
 
-from tprof import tprof
+from tprof import record, tprof
 from tprof.api import _extract_code, _format_time
 
 
@@ -218,6 +219,58 @@ class TestTprof:
             " tests.test_api:TestTprof.test_compare_no_baseline.<locals>.after() "
         )
         assert errlines[3].rstrip().endswith(" n/a")
+
+    def test_generator(self, capsys):
+        def values():
+            yield 1
+            yield 2
+
+        with tprof(values):
+            generator = values()
+            next(generator)
+            time.sleep(0.01)
+            next(generator)
+            with pytest.raises(StopIteration):
+                next(generator)
+            ((count, total, min_ns, max_ns, median_ns, stdev_ns),) = record.stats()
+
+        assert count == 1
+        assert total < 5_000_000  # excludes the 10ms suspended sleep
+
+        out, err = capsys.readouterr()
+        assert out == ""
+        errlines = err.splitlines()
+        assert len(errlines) == 3
+        assert errlines[2].startswith(
+            " tests.test_api:TestTprof.test_generator.<locals>.values() "
+        )
+
+    def test_generator_throw(self, capsys):
+        def values():
+            yield 1
+
+        with tprof(values):
+            generator = values()
+            next(generator)
+            time.sleep(0.01)
+            with pytest.raises(ValueError):
+                generator.throw(ValueError("Boom"))
+            ((count, total, *_),) = record.stats()
+
+        assert count == 1
+        assert total < 5_000_000  # excludes the 10ms suspended sleep
+
+    def test_coroutine(self, capsys):
+        async def task():
+            await asyncio.sleep(0.01)
+            return 1
+
+        with tprof(task):
+            asyncio.run(task())
+            ((count, total, *_),) = record.stats()
+
+        assert count == 1
+        assert total < 5_000_000  # excludes the 10ms awaited sleep
 
     def test_threaded(self, capsys):
         def worker() -> None:

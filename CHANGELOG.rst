@@ -5,6 +5,11 @@ Changelog
 * Report the median rather than the mean, since it is more robust to
   outliers. Comparison mode deltas are now computed from medians too.
 
+* Exclude suspended time for generator, coroutine, and asynchronous
+  generator targets. Previously, reported times included time spent
+  suspended, such as when awaiting I/O; now only actively executing time
+  counts.
+
 * Reduce profiling overhead by storing start and elapsed times in C data
   structures rather than Python dicts, lists, and ints, computing report
   statistics in C, and disabling monitoring events for non-target code.
