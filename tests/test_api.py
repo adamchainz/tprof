@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import NoReturn
@@ -219,6 +220,128 @@ class TestTprof:
             " tests.test_api:TestTprof.test_compare_no_baseline.<locals>.after() "
         )
         assert errlines[3].rstrip().endswith(" n/a")
+
+    def test_results(self, capsys):
+        def sample() -> int:
+            return 42
+
+        with tprof(sample) as results:
+            sample()
+            sample()
+
+        (function_stats,) = results
+        assert function_stats.name == (
+            "tests.test_api:TestTprof.test_results.<locals>.sample"
+        )
+        assert function_stats.calls == 2
+        assert (
+            function_stats.min_ns <= function_stats.median_ns <= function_stats.max_ns
+        )
+        assert function_stats.total_ns >= function_stats.max_ns
+        assert function_stats.stdev_ns >= 0.0
+
+    def test_compare_and_baseline_error(self):
+        def sample() -> int:
+            return 42  # pragma: no cover
+
+        with (
+            pytest.raises(ValueError) as excinfo,
+            tprof(sample, compare=True, baseline_path="tprof.json"),
+        ):
+            pass  # pragma: no cover
+
+        assert str(excinfo.value) == "compare and baseline_path may not be combined."
+
+    def test_json_path(self, capsys, tmp_path):
+        def sample() -> int:
+            return 42
+
+        path = tmp_path / "tprof.json"
+
+        with tprof(sample, label="run one", json_path=str(path)):
+            sample()
+
+        data = json.loads(path.read_text())
+        assert data["version"] == 1
+        assert data["label"] == "run one"
+        (function_data,) = data["functions"]
+        assert function_data["name"] == (
+            "tests.test_api:TestTprof.test_json_path.<locals>.sample"
+        )
+        assert function_data["calls"] == 1
+        assert function_data["min_ns"] <= function_data["max_ns"]
+
+    def test_json_path_stdout(self, capsys):
+        def sample() -> int:
+            return 42
+
+        with tprof(sample, json_path="-"):
+            sample()
+
+        out, err = capsys.readouterr()
+        data = json.loads(out)
+        assert data["version"] == 1
+        assert data["label"] is None
+        assert len(data["functions"]) == 1
+
+    def test_baseline(self, capsys, tmp_path):
+        def sample() -> int:
+            return 42
+
+        path = tmp_path / "tprof.json"
+
+        with tprof(sample, json_path=str(path)):
+            sample()
+        with tprof(sample, baseline_path=str(path)):
+            sample()
+
+        out, err = capsys.readouterr()
+        assert out == ""
+        errlines = err.splitlines()
+        assert len(errlines) == 6
+        assert errlines[4].rstrip().endswith(" delta")
+        assert errlines[5].rstrip().endswith("%")
+
+    def test_baseline_missing_function(self, capsys, tmp_path):
+        def sample() -> int:
+            return 42
+
+        path = tmp_path / "tprof.json"
+        path.write_text(
+            json.dumps(
+                {
+                    "version": 1,
+                    "label": None,
+                    "functions": [{"name": "other:function", "median_ns": 1.0}],
+                }
+            )
+        )
+
+        with tprof(sample, baseline_path=str(path)):
+            sample()
+
+        out, err = capsys.readouterr()
+        assert out == ""
+        errlines = err.splitlines()
+        assert len(errlines) == 3
+        assert errlines[2].rstrip().endswith(" n/a")
+
+    def test_baseline_invalid(self, tmp_path):
+        def sample() -> int:
+            return 42  # pragma: no cover
+
+        path = tmp_path / "tprof.json"
+        path.write_text("[]")
+
+        with (
+            pytest.raises(ValueError) as excinfo,
+            tprof(sample, baseline_path=str(path)),
+        ):
+            pass  # pragma: no cover
+
+        assert str(excinfo.value).startswith(
+            f"Cannot load baseline from {str(path)!r}:"
+        )
 
     def test_generator(self, capsys):
         def values():

@@ -5,6 +5,18 @@ Changelog
 * Report the median rather than the mean, since it is more robust to
   outliers. Comparison mode deltas are now computed from medians too.
 
+* ``tprof()`` now yields a list of ``FunctionStats`` objects, populated when
+  the profiled block ends, for programmatic access to the results.
+
+* Add ``--json`` option, and ``json_path`` argument for ``tprof()``, to write
+  statistics to a file as JSON.
+
+* Add ``--baseline`` option, and ``baseline_path`` argument for ``tprof()``,
+  to display deltas against the JSON statistics from a previous run.
+
+* Add ``--fail-above`` option to exit with status 1 if any target's median
+  time exceeds the given duration, for use as a regression gate in CI.
+
 * Exclude suspended time for generator, coroutine, and asynchronous
   generator targets. Previously, reported times included time spent
   suspended, such as when awaiting I/O; now only actively executing time

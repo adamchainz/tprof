@@ -98,17 +98,27 @@ Full help:
 
 .. code-block:: console
 
-   usage: tprof [-h] -t target [-x] (-m module | script) ...
+   usage: tprof [-h] -t target [-x | --baseline path] [--json path]
+                [--fail-above duration] [-m module]
+                [script] ...
 
    positional arguments:
-     script         Python script to run
-     args           Arguments to pass to the script or module
+     script                Python script to run
+     args                  Arguments to pass to the script or module
 
    options:
-     -h, --help     show this help message and exit
-     -t target      Target callable to profile (format: module:function).
-     -x, --compare  Compare performance of targets, with the first as baseline.
-     -m module      Run library module as a script (like python -m)
+     -h, --help            show this help message and exit
+     -t target             Target callable to profile (format: module:function).
+     -x, --compare         Compare performance of targets, with the first as
+                           baseline.
+     --baseline path       Compare against statistics from a previous run's
+                           --json file.
+     --json path           Write statistics as JSON to this file, or '-' for
+                           stdout.
+     --fail-above duration
+                           Exit with status 1 if any target's median time exceeds
+                           this duration, e.g. '5ms'.
+     -m module             Run library module as a script (like python -m)
 
 .. [[[end]]]
 
@@ -145,11 +155,63 @@ For example, given this code:
      example:before()   100 227ms   2ms ± 34μs   2ms … 2ms   -
      example:after()    100  86ms 856μs ± 15μs 835μs … 910μs -62.27%
 
+JSON output
+^^^^^^^^^^^
+
+Pass ``--json <path>`` to also write the statistics to the given file as JSON, or ``-`` to write them to standard output.
+The file contains a ``functions`` list with the name, call count, and total, minimum, maximum, median, and standard deviation of times, in nanoseconds, per target:
+
+.. code-block:: json
+
+    {
+      "version": 1,
+      "label": null,
+      "functions": [
+        {
+          "name": "lib:maths",
+          "calls": 2,
+          "total_ns": 610622917,
+          "min_ns": 304285875,
+          "max_ns": 306337042,
+          "median_ns": 305311458.5,
+          "stdev_ns": 1450393.5
+        }
+      ]
+    }
+
+Baseline comparison mode
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+Pass ``--baseline <path>`` with the ``--json`` output of a previous run to compare against that run, in an extra “delta” column that compares each function’s median against its median in the baseline run.
+Use this to check the effect of a change to the profiled code:
+
+.. code-block:: console
+
+    $ tprof -t lib:maths --json before.json ./example.py
+    ...
+    $ tprof -t lib:maths --baseline before.json ./example.py
+    ...
+    🎯 tprof results:
+     function    calls total  median ± σ     min … max     delta
+     lib:maths()     2 592ms 296ms ± 2ms  294ms … 297ms -3.11%
+
+Failure threshold
+^^^^^^^^^^^^^^^^^
+
+Pass ``--fail-above <duration>`` to make tprof exit with status 1 if any target’s median time exceeds the given duration, for use as a regression gate in CI.
+Specify the duration as a number followed by a unit: ``ns``, ``us``, ``ms``, or ``s``:
+
+.. code-block:: console
+
+    $ tprof -t lib:maths --fail-above 250ms ./example.py
+    ...
+    tprof: lib:maths() median 305311458ns exceeds 250000000ns
+
 API
 ---
 
-``tprof(*targets, label: str | None = None, compare: bool = False)``
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+``tprof(*targets, label=None, compare=False, json_path=None, baseline_path=None)``
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Use this context manager / decorator within your code to perform profiling in a specific block.
 The report is printed when the block ends, each time it ends.
@@ -162,6 +224,13 @@ __ https://docs.python.org/3.14/library/pkgutil.html#pkgutil.resolve_name
 ``label`` is an optional string to add to the report heading to distinguish multiple reports.
 
 Set ``compare`` to ``True`` to enable comparison mode, as documented above in the CLI section.
+
+Set ``json_path`` to a file path to also write the statistics as JSON, as documented above in the CLI section, or ``-`` for standard output.
+
+Set ``baseline_path`` to the path of a previous run’s JSON statistics to enable baseline comparison mode, as documented above in the CLI section.
+It cannot be combined with ``compare``.
+
+The context manager yields a list that is populated when the block ends with a ``FunctionStats`` object per target, with attributes ``name``, ``calls``, ``total_ns``, ``min_ns``, ``max_ns``, ``median_ns``, and ``stdev_ns``.
 
 For example, given this code:
 
