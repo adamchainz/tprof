@@ -65,6 +65,15 @@ def tprof(
         TOOL_ID, sys.monitoring.events.PY_START, record.py_start_callback
     )
     sys.monitoring.register_callback(
+        TOOL_ID, sys.monitoring.events.PY_RESUME, record.py_resume_callback
+    )
+    sys.monitoring.register_callback(
+        TOOL_ID, sys.monitoring.events.PY_THROW, record.py_throw_callback
+    )
+    sys.monitoring.register_callback(
+        TOOL_ID, sys.monitoring.events.PY_YIELD, record.py_yield_callback
+    )
+    sys.monitoring.register_callback(
         TOOL_ID, sys.monitoring.events.PY_RETURN, record.py_return_callback
     )
     sys.monitoring.register_callback(
@@ -75,6 +84,9 @@ def tprof(
         TOOL_ID,
         (
             sys.monitoring.events.PY_START
+            | sys.monitoring.events.PY_RESUME
+            | sys.monitoring.events.PY_THROW
+            | sys.monitoring.events.PY_YIELD
             | sys.monitoring.events.PY_RETURN
             | sys.monitoring.events.PY_UNWIND
         ),
@@ -92,6 +104,9 @@ def tprof(
     finally:
         sys.monitoring.set_events(TOOL_ID, sys.monitoring.events.NO_EVENTS)
         sys.monitoring.register_callback(TOOL_ID, sys.monitoring.events.PY_START, None)
+        sys.monitoring.register_callback(TOOL_ID, sys.monitoring.events.PY_RESUME, None)
+        sys.monitoring.register_callback(TOOL_ID, sys.monitoring.events.PY_THROW, None)
+        sys.monitoring.register_callback(TOOL_ID, sys.monitoring.events.PY_YIELD, None)
         sys.monitoring.register_callback(TOOL_ID, sys.monitoring.events.PY_RETURN, None)
         sys.monitoring.register_callback(TOOL_ID, sys.monitoring.events.PY_UNWIND, None)
         sys.monitoring.free_tool_id(TOOL_ID)
