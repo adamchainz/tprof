@@ -18,12 +18,42 @@ console = Console(stderr=True)
 code_to_name: dict[CodeType, str] = {}
 
 
+class FunctionStats:
+    __slots__ = (
+        "name",
+        "calls",
+        "total_ns",
+        "min_ns",
+        "max_ns",
+        "median_ns",
+        "stdev_ns",
+    )
+
+    def __init__(
+        self,
+        name: str,
+        calls: int,
+        total_ns: int,
+        min_ns: int,
+        max_ns: int,
+        median_ns: float,
+        stdev_ns: float,
+    ) -> None:
+        self.name = name
+        self.calls = calls
+        self.total_ns = total_ns
+        self.min_ns = min_ns
+        self.max_ns = max_ns
+        self.median_ns = median_ns
+        self.stdev_ns = stdev_ns
+
+
 @contextmanager
 def tprof(
     *targets: Any,
     label: str | None = None,
     compare: bool = False,
-) -> Generator[None]:
+) -> Generator[list[FunctionStats]]:
     """
     Profile time spent in target callables and print a report when done.
     """
@@ -83,9 +113,10 @@ def tprof(
     # sys.monitoring.DISABLE during any previous profiling session.
     sys.monitoring.restart_events()
 
+    results: list[FunctionStats] = []
     exc = False
     try:
-        yield
+        yield results
     except Exception:
         exc = True
         raise
@@ -96,16 +127,23 @@ def tprof(
         sys.monitoring.register_callback(TOOL_ID, sys.monitoring.events.PY_UNWIND, None)
         sys.monitoring.free_tool_id(TOOL_ID)
 
+        results[:] = [
+            FunctionStats(name, count, total, min_ns, max_ns, median_ns, stdev_ns)
+            for name, (count, total, min_ns, max_ns, median_ns, stdev_ns) in zip(
+                code_to_name.values(), record.stats(), strict=True
+            )
+        ]
+
         if not exc:
-            display_report(label=label, compare=compare)
+            display_report(results, label=label, compare=compare)
 
         code_to_name.clear()
         record.configure(())
 
 
-def display_report(label: str | None = None, compare: bool = False) -> None:
-    from tprof import record
-
+def display_report(
+    results: list[FunctionStats], label: str | None = None, compare: bool = False
+) -> None:
     heading = "[bold red]🎯 tprof[/bold red] results"
     if label:
         heading += f" @ [bold bright_blue]{label}[/bold bright_blue]"
@@ -129,9 +167,11 @@ def display_report(label: str | None = None, compare: bool = False) -> None:
     baseline: float | None = None
     first = True
 
-    for name, (count, total, min_ns, max_ns, median_ns, stdev_ns) in zip(
-        code_to_name.values(), record.stats(), strict=True
-    ):
+    for function_stats in results:
+        name = function_stats.name
+        count = function_stats.calls
+        median_ns = function_stats.median_ns
+
         if not compare:
             delta: tuple[str, ...] = ()
         else:
@@ -153,17 +193,23 @@ def display_report(label: str | None = None, compare: bool = False) -> None:
         table.add_row(
             f"[bold]{name}()[/bold]",
             str(count),
-            _format_time(total, None),
+            _format_time(function_stats.total_ns, None),
             (
                 _format_time(int(median_ns), "bright_green")
                 if count
                 else "[dim]n/a[/dim]"
             ),
             "±" if count > 1 else "",
-            _format_time(int(stdev_ns), "bright_green") if count > 1 else "",
-            _format_time(min_ns, "cyan") if count else "[dim]n/a[/dim]",
+            (
+                _format_time(int(function_stats.stdev_ns), "bright_green")
+                if count > 1
+                else ""
+            ),
+            _format_time(function_stats.min_ns, "cyan") if count else "[dim]n/a[/dim]",
             "…",
-            _format_time(max_ns, "magenta") if count else "[dim]n/a[/dim]",
+            _format_time(function_stats.max_ns, "magenta")
+            if count
+            else "[dim]n/a[/dim]",
             *delta,
         )
     console.print(table)

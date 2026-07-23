@@ -219,6 +219,25 @@ class TestTprof:
         )
         assert errlines[3].rstrip().endswith(" n/a")
 
+    def test_results(self, capsys):
+        def sample() -> int:
+            return 42
+
+        with tprof(sample) as results:
+            sample()
+            sample()
+
+        (function_stats,) = results
+        assert function_stats.name == (
+            "tests.test_api:TestTprof.test_results.<locals>.sample"
+        )
+        assert function_stats.calls == 2
+        assert (
+            function_stats.min_ns <= function_stats.median_ns <= function_stats.max_ns
+        )
+        assert function_stats.total_ns >= function_stats.max_ns
+        assert function_stats.stdev_ns >= 0.0
+
     def test_threaded(self, capsys):
         def worker() -> None:
             time.sleep(0.01)
