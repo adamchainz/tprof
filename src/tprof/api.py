@@ -4,7 +4,6 @@ import sys
 from collections.abc import Generator
 from contextlib import contextmanager
 from pkgutil import resolve_name
-from statistics import mean, stdev
 from types import CodeType
 from typing import Any
 
@@ -17,8 +16,6 @@ TOOL_NAME = "tprof"
 console = Console(stderr=True)
 
 code_to_name: dict[CodeType, str] = {}
-enter_times: dict[tuple[CodeType, int], list[int]] = {}
-call_times: dict[CodeType, list[int]] = {}
 
 
 @contextmanager
@@ -36,6 +33,7 @@ def tprof(
     if not targets:
         raise ValueError("At least one target callable must be provided.")
 
+    names: dict[CodeType, str] = {}
     for target in targets:
         code = _extract_code(target)
         if code is None:
@@ -56,18 +54,21 @@ def tprof(
             else:
                 name = f"<unknown>:{base_name}"
 
-        code_to_name[code] = name
-        call_times[code] = []
+        names[code] = name
+
+    code_to_name.clear()
+    code_to_name.update(names)
+    record.configure(tuple(names))
 
     sys.monitoring.use_tool_id(TOOL_ID, TOOL_NAME)
     sys.monitoring.register_callback(
         TOOL_ID, sys.monitoring.events.PY_START, record.py_start_callback
     )
     sys.monitoring.register_callback(
-        TOOL_ID, sys.monitoring.events.PY_RETURN, record.py_end_callback
+        TOOL_ID, sys.monitoring.events.PY_RETURN, record.py_return_callback
     )
     sys.monitoring.register_callback(
-        TOOL_ID, sys.monitoring.events.PY_UNWIND, record.py_end_callback
+        TOOL_ID, sys.monitoring.events.PY_UNWIND, record.py_unwind_callback
     )
 
     sys.monitoring.set_events(
@@ -78,6 +79,9 @@ def tprof(
             | sys.monitoring.events.PY_UNWIND
         ),
     )
+    # Re-enable events at code locations that callbacks disabled with
+    # sys.monitoring.DISABLE during any previous profiling session.
+    sys.monitoring.restart_events()
 
     exc = False
     try:
@@ -96,11 +100,12 @@ def tprof(
             display_report(label=label, compare=compare)
 
         code_to_name.clear()
-        enter_times.clear()
-        call_times.clear()
+        record.configure(())
 
 
 def display_report(label: str | None = None, compare: bool = False) -> None:
+    from tprof import record
+
     heading = "[bold red]🎯 tprof[/bold red] results"
     if label:
         heading += f" @ [bold bright_blue]{label}[/bold bright_blue]"
@@ -124,21 +129,21 @@ def display_report(label: str | None = None, compare: bool = False) -> None:
     baseline: float | None = None
     first = True
 
-    for code, times in call_times.items():
-        mean_times = mean(times) if times else 0.0
-
+    for name, (count, total, min_ns, max_ns, mean_ns, stdev_ns) in zip(
+        code_to_name.values(), record.stats(), strict=True
+    ):
         if not compare:
             delta: tuple[str, ...] = ()
         else:
             if first:
                 delta = ("[dim]-[/dim]",)
-                if times:
-                    baseline = mean_times
+                if count:
+                    baseline = mean_ns
             else:
                 if not baseline:
                     delta = ("[dim]n/a[/dim]",)
                 else:
-                    percent_diff = ((mean_times - baseline) / baseline) * 100
+                    percent_diff = ((mean_ns - baseline) / baseline) * 100
                     colour = (
                         "bold bright_green" if percent_diff <= 0 else "bold bright_red"
                     )
@@ -146,19 +151,15 @@ def display_report(label: str | None = None, compare: bool = False) -> None:
 
         first = False
         table.add_row(
-            f"[bold]{code_to_name[code]}()[/bold]",
-            str(len(times)),
-            _format_time(sum(times), None),
-            (
-                _format_time(int(mean_times), "bright_green")
-                if times
-                else "[dim]n/a[/dim]"
-            ),
-            "±" if len(times) > 1 else "",
-            _format_time(int(stdev(times)), "bright_green") if len(times) > 1 else "",
-            _format_time(min(times), "cyan") if times else "[dim]n/a[/dim]",
+            f"[bold]{name}()[/bold]",
+            str(count),
+            _format_time(total, None),
+            (_format_time(int(mean_ns), "bright_green") if count else "[dim]n/a[/dim]"),
+            "±" if count > 1 else "",
+            _format_time(int(stdev_ns), "bright_green") if count > 1 else "",
+            _format_time(min_ns, "cyan") if count else "[dim]n/a[/dim]",
             "…",
-            _format_time(max(times), "magenta") if times else "[dim]n/a[/dim]",
+            _format_time(max_ns, "magenta") if count else "[dim]n/a[/dim]",
             *delta,
         )
     console.print(table)
