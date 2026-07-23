@@ -41,6 +41,10 @@ Unreleased
 
   `PR #53 <https://github.com/adamchainz/tprof/pull/53>`__.
 
+* Fix timings for generators, coroutines, and asynchronous generators to exclude time spent suspended.
+
+  `PR #49 <https://github.com/adamchainz/tprof/pull/49>`__.
+
 * Build with frame pointers enabled, preparation for `PEP 831 <https://peps.python.org/pep-0831/>`__.
 
   `PR #40 <https://github.com/adamchainz/tprof/issues/40>`__.

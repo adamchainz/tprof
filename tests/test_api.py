@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import time
+from collections.abc import Generator
 from concurrent.futures import ThreadPoolExecutor
 from typing import NoReturn
 
@@ -357,6 +359,71 @@ class TestTprof:
         assert str(excinfo.value).startswith(
             f"Cannot load baseline from {str(path)!r}:"
         )
+
+    def test_generator(self, capsys):
+        def values() -> Generator[int]:
+            yield 1
+            yield 2
+
+        with tprof(values) as results:
+            generator = values()
+            next(generator)
+            time.sleep(0.01)
+            next(generator)
+            with pytest.raises(StopIteration):
+                next(generator)
+
+        (function_stats,) = results
+        assert function_stats.calls == 1
+        assert function_stats.total_ns < 5_000_000  # excludes the suspended sleep
+
+    def test_generator_throw(self, capsys):
+        def values() -> Generator[int]:
+            yield 1
+
+        with tprof(values) as results:
+            generator = values()
+            next(generator)
+            time.sleep(0.01)
+            with pytest.raises(ValueError):
+                generator.throw(ValueError("Boom"))
+
+        (function_stats,) = results
+        assert function_stats.calls == 1
+        assert function_stats.total_ns < 5_000_000  # excludes the suspended sleep
+
+    def test_generator_abandoned(self, capsys):
+        def slow() -> Generator[int]:
+            time.sleep(0.01)
+            yield 1
+            yield 2  # pragma: no cover
+
+        def fast() -> Generator[int]:
+            yield 1
+
+        with tprof(slow, fast) as results:
+            generator = slow()
+            next(generator)
+            del generator
+            for _ in range(10):
+                list(fast())
+
+        fast_stats = results[1]
+        assert fast_stats.calls == 10
+        # The abandoned generator's time is not attributed to a later frame.
+        assert fast_stats.max_ns < 5_000_000
+
+    def test_coroutine(self, capsys):
+        async def task() -> int:
+            await asyncio.sleep(0.01)
+            return 1
+
+        with tprof(task) as results:
+            asyncio.run(task())
+
+        (function_stats,) = results
+        assert function_stats.calls == 1
+        assert function_stats.total_ns < 5_000_000  # excludes the awaited sleep
 
     def test_threaded(self, capsys):
         def worker() -> None:

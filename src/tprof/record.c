@@ -24,6 +24,13 @@
  *   most once per (thread, code object).
  * - On Python 3.13+, timestamps come from PyTime_PerfCounterRaw(), avoiding
  *   a Python-level call to time.perf_counter_ns() and int boxing/unboxing.
+ * - For generator, coroutine, and async generator targets, suspended time is
+ *   excluded: each PY_START/PY_RESUME/PY_THROW to PY_YIELD/PY_RETURN/
+ *   PY_UNWIND segment is timed separately, with completed segments
+ *   accumulated per frame in a per-thread dict until the frame finishes.
+ *   Suspended frames resumed on a different thread than they started on lose
+ *   their earlier segments. Abandoned generators may finish without any
+ *   event, leaving their entry until the next configure().
  *
  * stats() computes the reported statistics directly over the raw values,
  * so recorded times never need converting to Python ints at all - only the
@@ -47,8 +54,9 @@ typedef struct ThreadData {
     uint64_t generation;
     Py_ssize_t num_targets;
     PyObject **codes;       /* per target, last matched code object (strong) */
-    I64Array *enter_stacks; /* per target, a stack of start times */
+    I64Array *enter_stacks; /* per target, a stack of segment start times */
     I64Array *durations;    /* per target, elapsed times of completed calls */
+    PyObject *frames;       /* dict of suspended frame -> completed segment time */
 } ThreadData;
 
 typedef struct {
@@ -118,9 +126,61 @@ i64array_append(I64Array *array, int64_t value)
     return 0;
 }
 
+/* Add delta to the time accumulated for a suspended frame. The dict holds a
+   strong reference to the frame, so an abandoned generator's entry can never
+   be confused with a later frame reusing its address. */
+static int
+frames_add(ThreadData *data, PyObject *frame, int64_t delta)
+{
+    if (data->frames == NULL && (data->frames = PyDict_New()) == NULL) {
+        return -1;
+    }
+    PyObject *old = PyDict_GetItemWithError(data->frames, frame);
+    if (old == NULL && PyErr_Occurred()) {
+        return -1;
+    }
+    PyObject *value = PyLong_FromLongLong((old ? PyLong_AsLongLong(old) : 0) + delta);
+    if (value == NULL) {
+        return -1;
+    }
+    int rc = PyDict_SetItem(data->frames, frame, value);
+    Py_DECREF(value);
+    return rc;
+}
+
+/* Remove and return the time accumulated for a finishing frame. */
+static int
+frames_pop(ThreadData *data, PyObject *frame, int64_t *accumulated)
+{
+    *accumulated = 0;
+    if (data->frames == NULL) {
+        return 0;
+    }
+    PyObject *value;
+#if PY_VERSION_HEX >= 0x030D0000
+    int rc = PyDict_Pop(data->frames, frame, &value);
+#else
+    value = PyDict_GetItemWithError(data->frames, frame);
+    int rc = value == NULL ? (PyErr_Occurred() ? -1 : 0) : 1;
+    if (rc == 1) {
+        Py_INCREF(value);
+        if (PyDict_DelItem(data->frames, frame) < 0) {
+            Py_DECREF(value);
+            return -1;
+        }
+    }
+#endif
+    if (rc == 1) {
+        *accumulated = PyLong_AsLongLong(value);
+        Py_DECREF(value);
+    }
+    return rc < 0 ? -1 : 0;
+}
+
 static void
 thread_data_free_arrays(ThreadData *data)
 {
+    Py_CLEAR(data->frames);
     for (Py_ssize_t i = 0; i < data->num_targets; i++) {
         Py_DECREF(data->codes[i]);
         PyMem_RawFree(data->enter_stacks[i].items);
@@ -207,10 +267,62 @@ find_target(ThreadData *data, PyObject *code)
 }
 
 static PyObject *
+segment_begin(PyObject *module, PyObject *code, bool disable_on_non_target)
+{
+    RecordModuleState *state = get_module_state(module);
+
+    ThreadData *data = get_thread_data(state);
+    if (data == NULL) {
+        return NULL;
+    }
+
+    Py_ssize_t index = find_target(data, code);
+    if (index == -2) {
+        return NULL;
+    }
+    if (index == -1) {
+        return Py_NewRef(disable_on_non_target ? state->monitoring_disable : Py_None);
+    }
+
+    int64_t timestamp;
+    if (now_ns(state, &timestamp) < 0) {
+        return NULL;
+    }
+    if (i64array_append(&data->enter_stacks[index], timestamp) < 0) {
+        return NULL;
+    }
+
+    Py_RETURN_NONE;
+}
+
+static PyObject *
 py_start_callback(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
     if (nargs != 2) {
         PyErr_SetString(PyExc_TypeError, "py_start_callback requires exactly 2 arguments");
+        return NULL;
+    }
+    /* Also used for PY_RESUME. Not a target: stop these events firing for
+       this code location. */
+    return segment_begin(module, args[0], true);
+}
+
+static PyObject *
+py_throw_callback(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+{
+    if (nargs != 3) {
+        PyErr_SetString(PyExc_TypeError, "py_throw_callback requires exactly 3 arguments");
+        return NULL;
+    }
+    /* PY_THROW events cannot be disabled, so return None for non-targets. */
+    return segment_begin(module, args[0], false);
+}
+
+static PyObject *
+py_yield_callback(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+{
+    if (nargs != 3) {
+        PyErr_SetString(PyExc_TypeError, "py_yield_callback requires exactly 3 arguments");
         return NULL;
     }
 
@@ -226,15 +338,24 @@ py_start_callback(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
         return NULL;
     }
     if (index == -1) {
-        /* Not a target: stop PY_START events firing for this code location. */
+        /* Not a target: stop PY_YIELD events firing for this code location. */
         return Py_NewRef(state->monitoring_disable);
     }
 
-    int64_t timestamp;
-    if (now_ns(state, &timestamp) < 0) {
+    int64_t end_time;
+    if (now_ns(state, &end_time) < 0) {
         return NULL;
     }
-    if (i64array_append(&data->enter_stacks[index], timestamp) < 0) {
+
+    I64Array *enter_stack = &data->enter_stacks[index];
+    if (enter_stack->len == 0) {
+        /* No matching segment start, e.g. profiling started mid-call. */
+        Py_RETURN_NONE;
+    }
+    int64_t start_time = enter_stack->items[--enter_stack->len];
+
+    PyObject *frame = (PyObject *)PyEval_GetFrame();
+    if (frame != NULL && frames_add(data, frame, end_time - start_time) < 0) {
         return NULL;
     }
 
@@ -277,7 +398,19 @@ py_end_common(
     }
     int64_t start_time = enter_stack->items[--enter_stack->len];
 
-    if (i64array_append(&data->durations[index], end_time - start_time) < 0) {
+    int64_t duration = end_time - start_time;
+    if (((PyCodeObject *)args[0])->co_flags &
+        (CO_GENERATOR | CO_COROUTINE | CO_ASYNC_GENERATOR)) {
+        /* Add this frame's earlier segments, from before suspensions. */
+        PyObject *frame = (PyObject *)PyEval_GetFrame();
+        int64_t accumulated = 0;
+        if (frame != NULL && frames_pop(data, frame, &accumulated) < 0) {
+            return NULL;
+        }
+        duration += accumulated;
+    }
+
+    if (i64array_append(&data->durations[index], duration) < 0) {
         return NULL;
     }
 
@@ -505,6 +638,8 @@ static PyMethodDef record_methods[] = {
     {"configure", (PyCFunction)record_configure, METH_O, NULL},
     {"stats", (PyCFunction)record_stats, METH_NOARGS, NULL},
     {"py_start_callback", (PyCFunction)py_start_callback, METH_FASTCALL, NULL},
+    {"py_throw_callback", (PyCFunction)py_throw_callback, METH_FASTCALL, NULL},
+    {"py_yield_callback", (PyCFunction)py_yield_callback, METH_FASTCALL, NULL},
     {"py_return_callback", (PyCFunction)py_return_callback, METH_FASTCALL, NULL},
     {"py_unwind_callback", (PyCFunction)py_unwind_callback, METH_FASTCALL, NULL},
     {NULL, NULL, 0, NULL}};
