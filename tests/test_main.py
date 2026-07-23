@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 from contextlib import chdir
@@ -7,6 +8,7 @@ from pathlib import Path
 from textwrap import dedent
 from unittest import mock
 
+import pytest
 from rich.console import Console
 
 from tprof import __main__  # noqa: F401
@@ -175,3 +177,96 @@ def test_main_compare(tmp_path, capsys):
     assert errlines[2].rstrip().endswith(" -")
     assert errlines[3].startswith(" example:after() ")
     assert errlines[3].rstrip().endswith("%")
+
+
+SLEEPY_SCRIPT = dedent(
+    """\
+    import time
+
+    def snooze():
+        time.sleep(0.001)
+
+    for _ in range(5):
+        snooze()
+    """
+)
+
+
+def test_main_json(tmp_path, capsys):
+    (tmp_path / "example.py").write_text(SLEEPY_SCRIPT)
+    json_path = tmp_path / "tprof.json"
+
+    try:
+        with chdir(tmp_path):
+            result = main(["-t", "snooze", "--json", str(json_path), "-m", "example"])
+    finally:
+        sys.modules.pop("example", None)
+
+    assert result == 0
+    data = json.loads(json_path.read_text())
+    assert data["version"] == 1
+    assert data["label"] is None
+    (function_data,) = data["functions"]
+    assert function_data["name"] == "example:snooze"
+    assert function_data["calls"] == 5
+    assert function_data["median_ns"] >= 1_000_000
+
+
+def test_main_json_stdout(tmp_path, capsys):
+    (tmp_path / "example.py").write_text(SLEEPY_SCRIPT)
+
+    try:
+        with chdir(tmp_path):
+            result = main(["-t", "snooze", "--json", "-", "-m", "example"])
+    finally:
+        sys.modules.pop("example", None)
+
+    assert result == 0
+    out, err = capsys.readouterr()
+    data = json.loads(out)
+    assert data["version"] == 1
+
+
+def test_main_baseline(tmp_path, capsys):
+    (tmp_path / "example.py").write_text(SLEEPY_SCRIPT)
+    json_path = tmp_path / "tprof.json"
+
+    try:
+        with chdir(tmp_path):
+            result = main(["-t", "snooze", "--json", str(json_path), "-m", "example"])
+            assert result == 0
+            result = main(
+                ["-t", "snooze", "--baseline", str(json_path), "-m", "example"]
+            )
+    finally:
+        sys.modules.pop("example", None)
+
+    assert result == 0
+    out, err = capsys.readouterr()
+    errlines = err.splitlines()
+    assert len(errlines) == 6
+    assert errlines[4].rstrip().endswith(" delta")
+    assert errlines[5].startswith(" example:snooze() ")
+    assert errlines[5].rstrip().endswith("%")
+
+
+def test_main_baseline_invalid(tmp_path, capsys):
+    (tmp_path / "example.py").write_text(SLEEPY_SCRIPT)
+    json_path = tmp_path / "tprof.json"
+    json_path.write_text("[]")
+
+    with chdir(tmp_path):
+        result = main(["-t", "snooze", "--baseline", str(json_path), "-m", "example"])
+
+    assert result == 2
+    out, err = capsys.readouterr()
+    assert err.startswith("tprof: Cannot load baseline from ")
+
+
+def test_main_baseline_and_compare(tmp_path, capsys):
+    with pytest.raises(SystemExit) as excinfo:
+        main(["-t", "example:snooze", "-x", "--baseline", "tprof.json", "example.py"])
+
+    assert excinfo.value.code == 2
+    out, err = capsys.readouterr()
+    assert "not allowed with argument" in err

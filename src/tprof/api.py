@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sys
 from collections.abc import Generator
 from contextlib import contextmanager
@@ -53,6 +54,8 @@ def tprof(
     *targets: Any,
     label: str | None = None,
     compare: bool = False,
+    json_path: str | None = None,
+    baseline_path: str | None = None,
 ) -> Generator[list[FunctionStats]]:
     """
     Profile time spent in target callables and print a report when done.
@@ -62,6 +65,12 @@ def tprof(
 
     if not targets:
         raise ValueError("At least one target callable must be provided.")
+    if compare and baseline_path is not None:
+        raise ValueError("compare and baseline_path may not be combined.")
+
+    baseline = None
+    if baseline_path is not None:
+        baseline = _load_baseline(baseline_path)
 
     names: dict[CodeType, str] = {}
     for target in targets:
@@ -135,14 +144,56 @@ def tprof(
         ]
 
         if not exc:
-            display_report(results, label=label, compare=compare)
+            if json_path is not None:
+                _write_json(json_path, label, results)
+            display_report(results, label=label, compare=compare, baseline=baseline)
 
         code_to_name.clear()
         record.configure(())
 
 
+def _load_baseline(path: str) -> dict[str, float]:
+    try:
+        with open(path) as fp:
+            data = json.load(fp)
+        return {
+            function["name"]: function["median_ns"] for function in data["functions"]
+        }
+    except (OSError, ValueError, TypeError, KeyError) as exc:
+        raise ValueError(f"Cannot load baseline from {path!r}: {exc}") from exc
+
+
+def _write_json(path: str, label: str | None, results: list[FunctionStats]) -> None:
+    data = {
+        "version": 1,
+        "label": label,
+        "functions": [
+            {
+                "name": function_stats.name,
+                "calls": function_stats.calls,
+                "total_ns": function_stats.total_ns,
+                "min_ns": function_stats.min_ns,
+                "max_ns": function_stats.max_ns,
+                "median_ns": function_stats.median_ns,
+                "stdev_ns": function_stats.stdev_ns,
+            }
+            for function_stats in results
+        ],
+    }
+    if path == "-":
+        json.dump(data, sys.stdout, indent=2)
+        sys.stdout.write("\n")
+    else:
+        with open(path, "w") as fp:
+            json.dump(data, fp, indent=2)
+            fp.write("\n")
+
+
 def display_report(
-    results: list[FunctionStats], label: str | None = None, compare: bool = False
+    results: list[FunctionStats],
+    label: str | None = None,
+    compare: bool = False,
+    baseline: dict[str, float] | None = None,
 ) -> None:
     heading = "[bold red]🎯 tprof[/bold red] results"
     if label:
@@ -161,37 +212,37 @@ def display_report(
     table.add_column("min", header_style="cyan", justify="right")
     table.add_column("…", justify="right")
     table.add_column("max", header_style="magenta", justify="left")
-    if compare:
+    if compare or baseline is not None:
         table.add_column("delta")
 
-    baseline: float | None = None
+    compare_baseline: float | None = None
     first = True
 
     for function_stats in results:
-        name = function_stats.name
         count = function_stats.calls
         median_ns = function_stats.median_ns
 
-        if not compare:
-            delta: tuple[str, ...] = ()
-        else:
+        delta: tuple[str, ...] = ()
+        if compare:
             if first:
                 delta = ("[dim]-[/dim]",)
                 if count:
-                    baseline = median_ns
+                    compare_baseline = median_ns
             else:
-                if not baseline:
+                if not compare_baseline:
                     delta = ("[dim]n/a[/dim]",)
                 else:
-                    percent_diff = ((median_ns - baseline) / baseline) * 100
-                    colour = (
-                        "bold bright_green" if percent_diff <= 0 else "bold bright_red"
-                    )
-                    delta = (f"[{colour}]{percent_diff:+.2f}%[/{colour}]",)
+                    delta = (_format_delta(median_ns, compare_baseline),)
+        elif baseline is not None:
+            baseline_median = baseline.get(function_stats.name)
+            if count and baseline_median:
+                delta = (_format_delta(median_ns, baseline_median),)
+            else:
+                delta = ("[dim]n/a[/dim]",)
 
         first = False
         table.add_row(
-            f"[bold]{name}()[/bold]",
+            f"[bold]{function_stats.name}()[/bold]",
             str(count),
             _format_time(function_stats.total_ns, None),
             (
@@ -213,6 +264,12 @@ def display_report(
             *delta,
         )
     console.print(table)
+
+
+def _format_delta(median_ns: float, baseline_ns: float) -> str:
+    percent_diff = ((median_ns - baseline_ns) / baseline_ns) * 100
+    colour = "bold bright_green" if percent_diff <= 0 else "bold bright_red"
+    return f"[{colour}]{percent_diff:+.2f}%[/{colour}]"
 
 
 def _format_time(ns: int, colour: str | None) -> str:

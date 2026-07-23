@@ -4,7 +4,7 @@ import argparse
 import sys
 from collections.abc import Sequence
 
-from tprof.api import tprof
+from tprof.api import _load_baseline, tprof
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -21,11 +21,24 @@ def main(argv: Sequence[str] | None = None) -> int:
         required=True,
         help="Target callable to profile (format: module:function).",
     )
-    parser.add_argument(
+    delta_group = parser.add_mutually_exclusive_group()
+    delta_group.add_argument(
         "-x",
         "--compare",
         action="store_true",
         help="Compare performance of targets, with the first as baseline.",
+    )
+    delta_group.add_argument(
+        "--baseline",
+        dest="baseline_path",
+        metavar="path",
+        help="Compare against statistics from a previous run's --json file.",
+    )
+    parser.add_argument(
+        "--json",
+        dest="json_path",
+        metavar="path",
+        help="Write statistics as JSON to this file, or '-' for stdout.",
     )
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument(
@@ -59,7 +72,19 @@ def main(argv: Sequence[str] | None = None) -> int:
             for target in targets
         ]
 
-    with tprof(*targets, compare=args.compare):
+    if args.baseline_path is not None:
+        try:
+            _load_baseline(args.baseline_path)
+        except ValueError as exc:
+            print(f"tprof: {exc}", file=sys.stderr)
+            return 2
+
+    with tprof(
+        *targets,
+        compare=args.compare,
+        json_path=args.json_path,
+        baseline_path=args.baseline_path,
+    ):
         orig_sys_argv = sys.argv
         sys.argv = [args.module, *args.args]
         try:
