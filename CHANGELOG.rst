@@ -2,6 +2,11 @@
 Changelog
 =========
 
+* Reduce overhead by storing times in C data structures and disabling monitoring events for non-target code.
+  Non-target functions no longer have any overhead, target functions have a 3x reduction in overhead, and memory use is 4x lower, and report calculation is ~100x faster.
+
+  `PR #47 <https://github.com/adamchainz/tprof/pull/47>`__.
+
 * Build with frame pointers enabled, preparation for `PEP 831 <https://peps.python.org/pep-0831/>`__.
 
   `PR #40 <https://github.com/adamchainz/tprof/issues/40>`__.
