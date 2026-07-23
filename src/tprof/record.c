@@ -24,6 +24,12 @@
  *   most once per (thread, code object).
  * - On Python 3.13+, timestamps come from PyTime_PerfCounterRaw(), avoiding
  *   a Python-level call to time.perf_counter_ns() and int boxing/unboxing.
+ * - For generator, coroutine, and async generator targets, suspended time is
+ *   excluded: each PY_START/PY_RESUME/PY_THROW to PY_YIELD/PY_RETURN/
+ *   PY_UNWIND segment is timed separately, with completed segments
+ *   accumulated per frame in a per-thread open-addressing hash table until
+ *   the frame finishes. Suspended frames resumed on a different thread than
+ *   they started on lose their earlier segments.
  *
  * stats() computes the reported statistics directly over the raw values,
  * so recorded times never need converting to Python ints at all - only the
@@ -42,17 +48,31 @@ typedef struct {
     Py_ssize_t capacity;
 } I64Array;
 
+typedef struct {
+    void *frame;
+    int64_t accumulated;
+} FrameEntry;
+
+typedef struct {
+    FrameEntry *entries;
+    Py_ssize_t used;
+    Py_ssize_t capacity; /* power of two, 0 when unallocated */
+} FrameMap;
+
 typedef struct ThreadData {
     struct ThreadData *next;
     uint64_t generation;
     Py_ssize_t num_targets;
     PyObject **codes;       /* per target, last matched code object (strong) */
-    I64Array *enter_stacks; /* per target, a stack of start times */
+    I64Array *enter_stacks; /* per target, a stack of segment start times */
     I64Array *durations;    /* per target, elapsed times of completed calls */
+    FrameMap frames;        /* per suspended frame, completed segment time */
 } ThreadData;
 
 typedef struct {
     PyObject **codes; /* strong references to target code objects */
+    char *gen_flags;  /* per target, whether the code object is a generator,
+                         coroutine, or async generator */
     Py_ssize_t num_targets;
     uint64_t generation;
     Py_tss_t tss;
@@ -118,9 +138,98 @@ i64array_append(I64Array *array, int64_t value)
     return 0;
 }
 
+static inline Py_ssize_t
+frame_map_home(FrameMap *map, void *frame)
+{
+    uintptr_t hash = (uintptr_t)frame * (uintptr_t)11400714819323198485ULL;
+    return (Py_ssize_t)(hash & (uintptr_t)(map->capacity - 1));
+}
+
+static int
+frame_map_grow(FrameMap *map)
+{
+    Py_ssize_t old_capacity = map->capacity;
+    FrameEntry *old_entries = map->entries;
+    Py_ssize_t new_capacity = old_capacity ? old_capacity * 2 : 16;
+    FrameEntry *new_entries = PyMem_RawCalloc((size_t)new_capacity, sizeof(FrameEntry));
+    if (new_entries == NULL) {
+        PyErr_NoMemory();
+        return -1;
+    }
+    map->entries = new_entries;
+    map->capacity = new_capacity;
+    for (Py_ssize_t i = 0; i < old_capacity; i++) {
+        if (old_entries[i].frame != NULL) {
+            Py_ssize_t slot = frame_map_home(map, old_entries[i].frame);
+            while (new_entries[slot].frame != NULL) {
+                slot = (slot + 1) & (new_capacity - 1);
+            }
+            new_entries[slot] = old_entries[i];
+        }
+    }
+    PyMem_RawFree(old_entries);
+    return 0;
+}
+
+static int
+frame_map_add(FrameMap *map, void *frame, int64_t delta)
+{
+    if (map->used * 3 >= map->capacity * 2 && frame_map_grow(map) < 0) {
+        return -1;
+    }
+    Py_ssize_t mask = map->capacity - 1;
+    Py_ssize_t slot = frame_map_home(map, frame);
+    while (map->entries[slot].frame != NULL && map->entries[slot].frame != frame) {
+        slot = (slot + 1) & mask;
+    }
+    if (map->entries[slot].frame == NULL) {
+        map->entries[slot].frame = frame;
+        map->entries[slot].accumulated = 0;
+        map->used++;
+    }
+    map->entries[slot].accumulated += delta;
+    return 0;
+}
+
+static int64_t
+frame_map_pop(FrameMap *map, void *frame)
+{
+    if (map->capacity == 0) {
+        return 0;
+    }
+    Py_ssize_t mask = map->capacity - 1;
+    Py_ssize_t slot = frame_map_home(map, frame);
+    while (map->entries[slot].frame != frame) {
+        if (map->entries[slot].frame == NULL) {
+            return 0;
+        }
+        slot = (slot + 1) & mask;
+    }
+    int64_t accumulated = map->entries[slot].accumulated;
+
+    /* Backward-shift deletion keeps linear probe chains intact. */
+    Py_ssize_t hole = slot;
+    Py_ssize_t next = (hole + 1) & mask;
+    while (map->entries[next].frame != NULL) {
+        Py_ssize_t home = frame_map_home(map, map->entries[next].frame);
+        if (((next - home) & mask) >= ((next - hole) & mask)) {
+            map->entries[hole] = map->entries[next];
+            hole = next;
+        }
+        next = (next + 1) & mask;
+    }
+    map->entries[hole].frame = NULL;
+    map->used--;
+    return accumulated;
+}
+
 static void
 thread_data_free_arrays(ThreadData *data)
 {
+    PyMem_RawFree(data->frames.entries);
+    data->frames.entries = NULL;
+    data->frames.used = 0;
+    data->frames.capacity = 0;
     for (Py_ssize_t i = 0; i < data->num_targets; i++) {
         Py_DECREF(data->codes[i]);
         PyMem_RawFree(data->enter_stacks[i].items);
@@ -207,10 +316,72 @@ find_target(ThreadData *data, PyObject *code)
 }
 
 static PyObject *
+segment_begin(PyObject *module, PyObject *code, bool disable_on_non_target)
+{
+    RecordModuleState *state = get_module_state(module);
+
+    ThreadData *data = get_thread_data(state);
+    if (data == NULL) {
+        return NULL;
+    }
+
+    Py_ssize_t index = find_target(data, code);
+    if (index == -2) {
+        return NULL;
+    }
+    if (index == -1) {
+        return Py_NewRef(disable_on_non_target ? state->monitoring_disable : Py_None);
+    }
+
+    int64_t timestamp;
+    if (now_ns(state, &timestamp) < 0) {
+        return NULL;
+    }
+    if (i64array_append(&data->enter_stacks[index], timestamp) < 0) {
+        return NULL;
+    }
+
+    Py_RETURN_NONE;
+}
+
+static PyObject *
 py_start_callback(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
     if (nargs != 2) {
         PyErr_SetString(PyExc_TypeError, "py_start_callback requires exactly 2 arguments");
+        return NULL;
+    }
+    /* Not a target: stop PY_START events firing for this code location. */
+    return segment_begin(module, args[0], true);
+}
+
+static PyObject *
+py_resume_callback(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+{
+    if (nargs != 2) {
+        PyErr_SetString(PyExc_TypeError, "py_resume_callback requires exactly 2 arguments");
+        return NULL;
+    }
+    /* Not a target: stop PY_RESUME events firing for this code location. */
+    return segment_begin(module, args[0], true);
+}
+
+static PyObject *
+py_throw_callback(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+{
+    if (nargs != 3) {
+        PyErr_SetString(PyExc_TypeError, "py_throw_callback requires exactly 3 arguments");
+        return NULL;
+    }
+    /* PY_THROW events cannot be disabled, so return None for non-targets. */
+    return segment_begin(module, args[0], false);
+}
+
+static PyObject *
+py_yield_callback(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+{
+    if (nargs != 3) {
+        PyErr_SetString(PyExc_TypeError, "py_yield_callback requires exactly 3 arguments");
         return NULL;
     }
 
@@ -226,15 +397,24 @@ py_start_callback(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
         return NULL;
     }
     if (index == -1) {
-        /* Not a target: stop PY_START events firing for this code location. */
+        /* Not a target: stop PY_YIELD events firing for this code location. */
         return Py_NewRef(state->monitoring_disable);
     }
 
-    int64_t timestamp;
-    if (now_ns(state, &timestamp) < 0) {
+    int64_t end_time;
+    if (now_ns(state, &end_time) < 0) {
         return NULL;
     }
-    if (i64array_append(&data->enter_stacks[index], timestamp) < 0) {
+
+    I64Array *enter_stack = &data->enter_stacks[index];
+    if (enter_stack->len == 0) {
+        /* No matching segment start, e.g. profiling started mid-call. */
+        Py_RETURN_NONE;
+    }
+    int64_t start_time = enter_stack->items[--enter_stack->len];
+
+    PyFrameObject *frame = PyEval_GetFrame();
+    if (frame != NULL && frame_map_add(&data->frames, frame, end_time - start_time) < 0) {
         return NULL;
     }
 
@@ -277,7 +457,16 @@ py_end_common(
     }
     int64_t start_time = enter_stack->items[--enter_stack->len];
 
-    if (i64array_append(&data->durations[index], end_time - start_time) < 0) {
+    int64_t duration = end_time - start_time;
+    if (state->gen_flags[index]) {
+        /* Add this frame's earlier segments, from before suspensions. */
+        PyFrameObject *frame = PyEval_GetFrame();
+        if (frame != NULL) {
+            duration += frame_map_pop(&data->frames, frame);
+        }
+    }
+
+    if (i64array_append(&data->durations[index], duration) < 0) {
         return NULL;
     }
 
@@ -310,9 +499,13 @@ record_configure(PyObject *module, PyObject *arg)
 
     Py_ssize_t num_targets = PyTuple_GET_SIZE(arg);
     PyObject **codes = NULL;
+    char *gen_flags = NULL;
     if (num_targets > 0) {
         codes = PyMem_RawCalloc((size_t)num_targets, sizeof(PyObject *));
-        if (codes == NULL) {
+        gen_flags = PyMem_RawCalloc((size_t)num_targets, 1);
+        if (codes == NULL || gen_flags == NULL) {
+            PyMem_RawFree(codes);
+            PyMem_RawFree(gen_flags);
             return PyErr_NoMemory();
         }
         for (Py_ssize_t i = 0; i < num_targets; i++) {
@@ -322,11 +515,14 @@ record_configure(PyObject *module, PyObject *arg)
                     Py_DECREF(codes[j]);
                 }
                 PyMem_RawFree(codes);
+                PyMem_RawFree(gen_flags);
                 PyErr_SetString(
                     PyExc_TypeError, "configure() argument must contain only code objects");
                 return NULL;
             }
             codes[i] = Py_NewRef(code);
+            int flags = ((PyCodeObject *)code)->co_flags;
+            gen_flags[i] = (flags & (CO_GENERATOR | CO_COROUTINE | CO_ASYNC_GENERATOR)) != 0;
         }
     }
 
@@ -334,7 +530,9 @@ record_configure(PyObject *module, PyObject *arg)
         Py_DECREF(state->codes[i]);
     }
     PyMem_RawFree(state->codes);
+    PyMem_RawFree(state->gen_flags);
     state->codes = codes;
+    state->gen_flags = gen_flags;
     state->num_targets = num_targets;
     state->generation++;
 
@@ -505,6 +703,9 @@ static PyMethodDef record_methods[] = {
     {"configure", (PyCFunction)record_configure, METH_O, NULL},
     {"stats", (PyCFunction)record_stats, METH_NOARGS, NULL},
     {"py_start_callback", (PyCFunction)py_start_callback, METH_FASTCALL, NULL},
+    {"py_resume_callback", (PyCFunction)py_resume_callback, METH_FASTCALL, NULL},
+    {"py_throw_callback", (PyCFunction)py_throw_callback, METH_FASTCALL, NULL},
+    {"py_yield_callback", (PyCFunction)py_yield_callback, METH_FASTCALL, NULL},
     {"py_return_callback", (PyCFunction)py_return_callback, METH_FASTCALL, NULL},
     {"py_unwind_callback", (PyCFunction)py_unwind_callback, METH_FASTCALL, NULL},
     {NULL, NULL, 0, NULL}};
@@ -514,6 +715,7 @@ record_exec(PyObject *module)
 {
     RecordModuleState *state = get_module_state(module);
     state->codes = NULL;
+    state->gen_flags = NULL;
     state->num_targets = 0;
     state->generation = 0;
     state->threads_lock = NULL;
@@ -589,6 +791,8 @@ record_clear(PyObject *module)
     }
     PyMem_RawFree(state->codes);
     state->codes = NULL;
+    PyMem_RawFree(state->gen_flags);
+    state->gen_flags = NULL;
     state->num_targets = 0;
     Py_CLEAR(state->monitoring_disable);
 #if PY_VERSION_HEX < 0x030D0000
