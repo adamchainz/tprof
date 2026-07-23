@@ -7,6 +7,11 @@ Changelog
 
   `PR #47 <https://github.com/adamchainz/tprof/pull/47>`__.
 
+* Report the median rather than the mean, since it is more robust to outliers.
+  Comparison mode deltas are now computed from medians too.
+
+  `PR #48 <https://github.com/adamchainz/tprof/pull/48>`__.
+
 * Build with frame pointers enabled, preparation for `PEP 831 <https://peps.python.org/pep-0831/>`__.
 
   `PR #40 <https://github.com/adamchainz/tprof/issues/40>`__.

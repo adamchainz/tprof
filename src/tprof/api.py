@@ -117,7 +117,7 @@ def display_report(label: str | None = None, compare: bool = False) -> None:
     table.add_column("function")
     table.add_column("calls", justify="right")
     table.add_column("total", justify="right")
-    table.add_column("mean", header_style="bright_green", justify="right")
+    table.add_column("median", header_style="bright_green", justify="right")
     table.add_column("±", justify="right")
     table.add_column("σ", header_style="bright_green", justify="left")
     table.add_column("min", header_style="cyan", justify="right")
@@ -129,7 +129,7 @@ def display_report(label: str | None = None, compare: bool = False) -> None:
     baseline: float | None = None
     first = True
 
-    for name, (count, total, min_ns, max_ns, mean_ns, stdev_ns) in zip(
+    for name, (count, total, min_ns, max_ns, median_ns, stdev_ns) in zip(
         code_to_name.values(), record.stats(), strict=True
     ):
         if not compare:
@@ -138,12 +138,12 @@ def display_report(label: str | None = None, compare: bool = False) -> None:
             if first:
                 delta = ("[dim]-[/dim]",)
                 if count:
-                    baseline = mean_ns
+                    baseline = median_ns
             else:
                 if not baseline:
                     delta = ("[dim]n/a[/dim]",)
                 else:
-                    percent_diff = ((mean_ns - baseline) / baseline) * 100
+                    percent_diff = ((median_ns - baseline) / baseline) * 100
                     colour = (
                         "bold bright_green" if percent_diff <= 0 else "bold bright_red"
                     )
@@ -154,7 +154,11 @@ def display_report(label: str | None = None, compare: bool = False) -> None:
             f"[bold]{name}()[/bold]",
             str(count),
             _format_time(total, None),
-            (_format_time(int(mean_ns), "bright_green") if count else "[dim]n/a[/dim]"),
+            (
+                _format_time(int(median_ns), "bright_green")
+                if count
+                else "[dim]n/a[/dim]"
+            ),
             "±" if count > 1 else "",
             _format_time(int(stdev_ns), "bright_green") if count > 1 else "",
             _format_time(min_ns, "cyan") if count else "[dim]n/a[/dim]",
