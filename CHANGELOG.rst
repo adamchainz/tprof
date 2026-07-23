@@ -12,6 +12,10 @@ Changelog
 
   `PR #48 <https://github.com/adamchainz/tprof/pull/48>`__.
 
+* ``tprof()`` now yields a list of ``FunctionStats`` objects, populated when the profiled block ends, for programmatic access to the results.
+
+  `PR #52 <https://github.com/adamchainz/tprof/pull/52>`__.
+
 * Build with frame pointers enabled, preparation for `PEP 831 <https://peps.python.org/pep-0831/>`__.
 
   `PR #40 <https://github.com/adamchainz/tprof/issues/40>`__.

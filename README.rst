@@ -163,6 +163,9 @@ __ https://docs.python.org/3.14/library/pkgutil.html#pkgutil.resolve_name
 
 Set ``compare`` to ``True`` to enable comparison mode, as documented above in the CLI section.
 
+The context manager yields a list of ``FunctionStats``, populated with one entry per target when the profiled block ends, for programmatic access to the results.
+Each ``FunctionStats`` has these attributes: ``name``, ``calls``, ``total_ns``, ``min_ns``, ``max_ns``, ``median_ns``, and ``stdev_ns``.
+
 For example, given this code:
 
 .. code-block:: python
@@ -219,6 +222,21 @@ Another example using comparison mode:
      function          calls total  median ± σ      min … max delta
      __main__:before()   100 227ms   2ms ± 83μs   2ms … 3ms -
      __main__:after()    100  85ms 853μs ± 22μs 835μs … 1ms -62.35%
+
+Use the yielded list to access the results programmatically.
+It contains one ``FunctionStats`` per target, in the same order as passed to ``tprof()``, so with a single target you can unpack it directly:
+
+.. code-block:: python
+
+    from lib import maths
+
+    from tprof import tprof
+
+    with tprof(maths) as results:
+        maths()
+
+    (function_stats,) = results  # unpack the single result for maths()
+    print(f"{function_stats.name} took {function_stats.median_ns}ns")
 
 History
 -------
