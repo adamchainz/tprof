@@ -71,7 +71,7 @@ When using ``-m`` with a module, you can skip the ``<module>`` part and it will 
     $ tprof -t lib:maths ./example.py
     ...
     🎯 tprof results:
-     function    calls total  mean ± σ     min … max
+     function    calls total  median ± σ     min … max
      lib:maths()     2 610ms 305ms ± 2ms 304ms … 307ms
 
 Full help:
@@ -141,7 +141,7 @@ For example, given this code:
 
     $ tprof -x -t before -t after -m example
     🎯 tprof results:
-     function         calls total  mean ± σ      min … max   delta
+     function         calls total  median ± σ      min … max   delta
      example:before()   100 227ms   2ms ± 34μs   2ms … 2ms   -
      example:after()    100  86ms 856μs ± 15μs 835μs … 910μs -62.27%
 
@@ -183,7 +183,7 @@ For example, given this code:
     $ python example.py
     Doing the maths…
     🎯 tprof results:
-     function    calls total  mean ± σ   min … max
+     function    calls total  median ± σ   min … max
      lib:maths()     1 305ms 305ms     305ms … 305ms
     The maths has been done!
 
@@ -216,7 +216,7 @@ Another example using comparison mode:
 
     $ python example.py
     🎯 tprof results:
-     function          calls total  mean ± σ      min … max delta
+     function          calls total  median ± σ      min … max delta
      __main__:before()   100 227ms   2ms ± 83μs   2ms … 3ms -
      __main__:after()    100  85ms 853μs ± 22μs 835μs … 1ms -62.35%
 

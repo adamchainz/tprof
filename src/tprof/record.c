@@ -5,6 +5,7 @@
 #include <math.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <string.h>
 
 /*
  * Recorded times are stored in C data structures rather than Python objects,
@@ -24,7 +25,7 @@
  * - On Python 3.13+, timestamps come from PyTime_PerfCounterRaw(), avoiding
  *   a Python-level call to time.perf_counter_ns() and int boxing/unboxing.
  *
- * stats() computes the reported statistics directly over the raw buffers,
+ * stats() computes the reported statistics directly over the raw values,
  * so recorded times never need converting to Python ints at all - only the
  * six aggregate values per target cross into Python.
  *
@@ -352,6 +353,41 @@ record_configure(PyObject *module, PyObject *arg)
     Py_RETURN_NONE;
 }
 
+/* Partially sort values so values[k] holds the k'th smallest value, with all
+   smaller values before it, using quickselect with Hoare partitioning. */
+static int64_t
+select_kth(int64_t *values, Py_ssize_t length, Py_ssize_t k)
+{
+    Py_ssize_t low = 0;
+    Py_ssize_t high = length - 1;
+    while (low < high) {
+        int64_t pivot = values[low + (high - low) / 2];
+        Py_ssize_t i = low - 1;
+        Py_ssize_t j = high + 1;
+        for (;;) {
+            do {
+                i++;
+            } while (values[i] < pivot);
+            do {
+                j--;
+            } while (values[j] > pivot);
+            if (i >= j) {
+                break;
+            }
+            int64_t swapped = values[i];
+            values[i] = values[j];
+            values[j] = swapped;
+        }
+        if (k <= j) {
+            high = j;
+        }
+        else {
+            low = j + 1;
+        }
+    }
+    return values[k];
+}
+
 static PyObject *
 record_stats(PyObject *module, PyObject *Py_UNUSED(ignored))
 {
@@ -370,52 +406,90 @@ record_stats(PyObject *module, PyObject *Py_UNUSED(ignored))
 
     for (Py_ssize_t i = 0; i < state->num_targets; i++) {
         Py_ssize_t count = 0;
-        int64_t total = 0;
-        int64_t minimum = 0;
-        int64_t maximum = 0;
         for (ThreadData *data = threads; data != NULL; data = data->next) {
-            if (data->generation != state->generation) {
-                continue;
-            }
-            I64Array *durations = &data->durations[i];
-            for (Py_ssize_t j = 0; j < durations->len; j++) {
-                int64_t value = durations->items[j];
-                if (count == 0 || value < minimum) {
-                    minimum = value;
-                }
-                if (count == 0 || value > maximum) {
-                    maximum = value;
-                }
-                total += value;
-                count++;
+            if (data->generation == state->generation) {
+                count += data->durations[i].len;
             }
         }
 
-        double mean = count > 0 ? (double)total / (double)count : 0.0;
-
-        /* Sample standard deviation, matching statistics.stdev(). */
-        double stdev = 0.0;
-        if (count > 1) {
-            double squared_deviations = 0.0;
+        /* Gather this target's durations from the per-thread buffers into
+           one scratch buffer, for the median's quickselect. */
+        int64_t *values = NULL;
+        if (count > 0) {
+            values = PyMem_RawMalloc((size_t)count * sizeof(int64_t));
+            if (values == NULL) {
+                Py_DECREF(result);
+                return PyErr_NoMemory();
+            }
+            Py_ssize_t position = 0;
             for (ThreadData *data = threads; data != NULL; data = data->next) {
                 if (data->generation != state->generation) {
                     continue;
                 }
                 I64Array *durations = &data->durations[i];
-                for (Py_ssize_t j = 0; j < durations->len; j++) {
-                    double deviation = (double)durations->items[j] - mean;
-                    squared_deviations += deviation * deviation;
+                if (durations->len > 0) {
+                    memcpy(&values[position],
+                        durations->items,
+                        (size_t)durations->len * sizeof(int64_t));
+                    position += durations->len;
                 }
+            }
+        }
+
+        int64_t total = 0;
+        int64_t minimum = 0;
+        int64_t maximum = 0;
+        for (Py_ssize_t j = 0; j < count; j++) {
+            int64_t value = values[j];
+            if (j == 0 || value < minimum) {
+                minimum = value;
+            }
+            if (j == 0 || value > maximum) {
+                maximum = value;
+            }
+            total += value;
+        }
+
+        /* Sample standard deviation, matching statistics.stdev(). */
+        double stdev = 0.0;
+        if (count > 1) {
+            double mean = (double)total / (double)count;
+            double squared_deviations = 0.0;
+            for (Py_ssize_t j = 0; j < count; j++) {
+                double deviation = (double)values[j] - mean;
+                squared_deviations += deviation * deviation;
             }
             stdev = sqrt(squared_deviations / (double)(count - 1));
         }
+
+        /* Median, matching statistics.median(): for an even count, the
+           midpoint of the two middle values. Computed last since quickselect
+           reorders the scratch buffer. */
+        double median = 0.0;
+        if (count > 0) {
+            int64_t upper = select_kth(values, count, count / 2);
+            if (count % 2) {
+                median = (double)upper;
+            }
+            else {
+                int64_t lower = values[0];
+                for (Py_ssize_t j = 1; j < count / 2; j++) {
+                    if (values[j] > lower) {
+                        lower = values[j];
+                    }
+                }
+                median = ((double)lower + (double)upper) / 2.0;
+            }
+        }
+
+        PyMem_RawFree(values);
 
         PyObject *item = Py_BuildValue("nLLLdd",
             count,
             (long long)total,
             (long long)minimum,
             (long long)maximum,
-            mean,
+            median,
             stdev);
         if (item == NULL) {
             Py_DECREF(result);
