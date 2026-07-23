@@ -12,6 +12,15 @@ Changelog
 
   `PR #48 <https://github.com/adamchainz/tprof/pull/48>`__.
 
+* Add ``--json`` option, and ``json_path`` argument for ``tprof()``, to write
+  statistics to a file as JSON.
+
+* Add ``--baseline`` option, and ``baseline_path`` argument for ``tprof()``,
+  to display deltas against the JSON statistics from a previous run.
+
+* Add ``--fail-above`` option to exit with status 1 if any target's median
+  time exceeds the given duration, for use as a regression gate in CI.
+
 * Build with frame pointers enabled, preparation for `PEP 831 <https://peps.python.org/pep-0831/>`__.
 
   `PR #40 <https://github.com/adamchainz/tprof/issues/40>`__.
