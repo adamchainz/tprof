@@ -16,6 +16,18 @@ Changelog
 
   `PR #52 <https://github.com/adamchainz/tprof/pull/52>`__.
 
+* Add two options useful for comparing data between runs, such as when switching Git branches:
+
+  * `--json <path>` (`json_path` in the API) writes the statistics to a file
+    as JSON, or to stdout with '-'.
+
+  * `--baseline <path>` (`baseline_path` in the API) reads a previous run's
+    `--json` output and shows a delta column comparing each function's
+    median against that run. Mutually exclusive with `-x` (`--compare`), which
+    compares between targets within one run.
+
+  `PR #53 <https://github.com/adamchainz/tprof/pull/53>`__.
+
 * Build with frame pointers enabled, preparation for `PEP 831 <https://peps.python.org/pep-0831/>`__.
 
   `PR #40 <https://github.com/adamchainz/tprof/issues/40>`__.
