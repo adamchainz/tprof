@@ -203,7 +203,7 @@ The report is printed when the block ends, each time it ends.
 Each item in ``targets`` may be a callable to profile, or a string reference to one that will be resolved with |pkgutil.resolve_name()|__.
 
 .. |pkgutil.resolve_name()| replace:: ``pkgutil.resolve_name()``
-__ https://docs.python.org/3.14/library/pkgutil.html#pkgutil.resolve_name
+__ https://docs.python.org/3/library/pkgutil.html#pkgutil.resolve_name
 
 ``label`` is an optional string to add to the report heading to distinguish multiple reports.
 
@@ -294,7 +294,7 @@ History
 
 When optimizing Python code, I found I was using this workflow:
 
-1. Profile the whole program with a tool like `cProfile <https://docs.python.org/3.14/library/profile.html>`__ or `py-spy <https://github.com/benfred/py-spy>`__ to find slow functions.
+1. Profile the whole program with a tool like `cProfile <https://docs.python.org/3/library/profile.html>`__ or `py-spy <https://github.com/benfred/py-spy>`__ to find slow functions.
 2. Pick a function to optimize.
 3. Make a change.
 4. Re-profile the whole program to see if the changes helped.
