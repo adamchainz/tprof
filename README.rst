@@ -34,7 +34,7 @@ A targeting profiler.
 Requirements
 ------------
 
-Python 3.12 to 3.14 supported.
+Python 3.12 to 3.15 supported.
 
 Installation
 ------------
