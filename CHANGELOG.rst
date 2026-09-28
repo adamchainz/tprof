@@ -11,6 +11,8 @@ Unreleased
 
 * Fix a failed nested ``tprof()`` call corrupting the results of the active profiling session.
 
+* Fix ``--compare`` reporting a ``-100.00%`` delta for targets that were never called.
+
 
 1.3.0 (2026-08-08)
 ------------------

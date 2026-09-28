@@ -232,7 +232,7 @@ def display_report(
                 if count:
                     compare_baseline = median_ns
             else:
-                if not compare_baseline:
+                if not count or not compare_baseline:
                     delta = ("[dim]n/a[/dim]",)
                 else:
                     delta = (_format_delta(median_ns, compare_baseline),)
