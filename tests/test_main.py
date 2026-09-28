@@ -110,6 +110,17 @@ def test_main_script(tmp_path, capsys):
     assert errlines[2].startswith(" pathlib:Path.__new__() ")
 
 
+def test_main_script_sys_argv(tmp_path, capsys):
+    (tmp_path / "example.py").write_text("import sys\nprint(sys.argv)\n")
+
+    with chdir(tmp_path):
+        result = main(["-t", "json:dumps", "example.py", "a", "b"])
+
+    assert result == 0
+    out, err = capsys.readouterr()
+    assert out == "['example.py', 'a', 'b']\n"
+
+
 def test_main_module(tmp_path, capsys):
     path = tmp_path / "example.py"
     path.write_text(

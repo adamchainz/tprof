@@ -7,6 +7,9 @@ Unreleased
 
 * Support Python 3.15.
 
+* Fix ``sys.argv[0]`` being ``None`` when running a script with the command line interface.
+
+
 1.3.0 (2026-08-08)
 ------------------
 

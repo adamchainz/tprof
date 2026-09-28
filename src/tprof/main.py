@@ -86,7 +86,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         baseline_path=args.baseline_path,
     ):
         orig_sys_argv = sys.argv
-        sys.argv = [args.module, *args.args]
+        sys.argv = [args.module or args.script, *args.args]
         try:
             if args.module:
                 import runpy
