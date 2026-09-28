@@ -62,9 +62,6 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     args = parser.parse_args(argv)
 
-    if args.module:
-        sys.path.insert(0, "")
-
     targets = args.targets
     if args.module:
         targets = [
@@ -79,6 +76,22 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"tprof: {exc}", file=sys.stderr)
             return 2
 
+    if args.module:
+        sys.path.insert(0, "")
+    try:
+        _run(args, targets)
+    finally:
+        if args.module:
+            # Remove by value, since the profiled code may have changed sys.path.
+            try:
+                sys.path.remove("")
+            except ValueError:
+                pass
+
+    return 0
+
+
+def _run(args: argparse.Namespace, targets: list[str]) -> None:
     with tprof(
         *targets,
         compare=args.compare,
@@ -104,8 +117,3 @@ def main(argv: Sequence[str] | None = None) -> int:
                     )
         finally:
             sys.argv = orig_sys_argv
-
-    if args.module:
-        sys.path.pop(0)
-
-    return 0
