@@ -281,3 +281,55 @@ def test_main_baseline_and_compare(tmp_path, capsys):
     assert excinfo.value.code == 2
     out, err = capsys.readouterr()
     assert "not allowed with argument" in err
+
+
+def test_main_module_restores_sys_path(tmp_path):
+    (tmp_path / "example.py").write_text("raise RuntimeError('boom')\n")
+    orig_sys_path = sys.path.copy()
+
+    try:
+        with chdir(tmp_path), pytest.raises(RuntimeError):
+            main(["-t", "json:dumps", "-m", "example"])
+    finally:
+        sys.modules.pop("example", None)
+
+    assert sys.path == orig_sys_path
+
+
+def test_main_module_sys_path_modified(tmp_path):
+    (tmp_path / "example.py").write_text("import sys\nsys.path.insert(0, 'extra')\n")
+    orig_sys_path = sys.path.copy()
+
+    try:
+        with chdir(tmp_path):
+            result = main(["-t", "json:dumps", "-m", "example"])
+        assert result == 0
+        assert sys.path == ["extra", *orig_sys_path]
+    finally:
+        sys.modules.pop("example", None)
+        sys.path[:] = orig_sys_path
+
+
+def test_main_module_sys_path_entry_removed(tmp_path):
+    (tmp_path / "example.py").write_text("import sys\nsys.path.remove('')\n")
+    orig_sys_path = sys.path.copy()
+
+    try:
+        with chdir(tmp_path):
+            result = main(["-t", "json:dumps", "-m", "example"])
+    finally:
+        sys.modules.pop("example", None)
+
+    assert result == 0
+    assert sys.path == orig_sys_path
+
+
+def test_main_baseline_invalid_restores_sys_path(tmp_path, capsys):
+    json_path = tmp_path / "tprof.json"
+    json_path.write_text("[]")
+    orig_sys_path = sys.path.copy()
+
+    result = main(["-t", "snooze", "--baseline", str(json_path), "-m", "example"])
+
+    assert result == 2
+    assert sys.path == orig_sys_path

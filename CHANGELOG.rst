@@ -13,6 +13,8 @@ Unreleased
 
 * Fix ``--compare`` reporting a ``-100.00%`` delta for targets that were never called.
 
+* Restore ``sys.path`` when running a module with ``-m`` fails.
+
 
 1.3.0 (2026-08-08)
 ------------------
