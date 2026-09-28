@@ -9,6 +9,8 @@ Unreleased
 
 * Fix ``sys.argv[0]`` being ``None`` when running a script with the command line interface.
 
+* Fix a failed nested ``tprof()`` call corrupting the results of the active profiling session.
+
 
 1.3.0 (2026-08-08)
 ------------------

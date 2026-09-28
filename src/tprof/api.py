@@ -95,11 +95,14 @@ def tprof(
 
         names[code] = name
 
+    # Claim the tool ID before touching shared state so that a nested tprof()
+    # call laeves any active profiling session intact.
+    sys.monitoring.use_tool_id(TOOL_ID, TOOL_NAME)
+
     code_to_name.clear()
     code_to_name.update(names)
     record.configure(tuple(names))
 
-    sys.monitoring.use_tool_id(TOOL_ID, TOOL_NAME)
     sys.monitoring.register_callback(
         TOOL_ID, sys.monitoring.events.PY_START, record.py_start_callback
     )
