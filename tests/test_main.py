@@ -121,6 +121,26 @@ def test_main_script_sys_argv(tmp_path, capsys):
     assert out == "['example.py', 'a', 'b']\n"
 
 
+def test_main_script_sys_path(tmp_path, capsys):
+    (tmp_path / "helper.py").write_text("def work():\n    return 1\n")
+    (tmp_path / "example.py").write_text(
+        "import sys\nimport helper\nhelper.work()\nprint(sys.path[0])\n"
+    )
+    orig_sys_path = sys.path.copy()
+
+    try:
+        result = main(["-t", "helper:work", str(tmp_path / "example.py")])
+    finally:
+        sys.modules.pop("helper", None)
+
+    assert result == 0
+    assert sys.path == orig_sys_path
+    out, err = capsys.readouterr()
+    assert out == f"{tmp_path.resolve()}\n"
+    errlines = err.splitlines()
+    assert errlines[2].startswith(" helper:work() ")
+
+
 def test_main_module(tmp_path, capsys):
     path = tmp_path / "example.py"
     path.write_text(

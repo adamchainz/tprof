@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from collections.abc import Sequence
 
@@ -76,17 +77,21 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"tprof: {exc}", file=sys.stderr)
             return 2
 
+    # Match python's sys.path[0]: the current directory for -m, or the
+    # script's directory, with symlinks resolved.
     if args.module:
-        sys.path.insert(0, "")
+        path_entry = ""
+    else:
+        path_entry = os.path.dirname(os.path.realpath(args.script))
+    sys.path.insert(0, path_entry)
     try:
         _run(args, targets)
     finally:
-        if args.module:
-            # Remove by value, since the profiled code may have changed sys.path.
-            try:
-                sys.path.remove("")
-            except ValueError:
-                pass
+        # Remove by value, since the profiled code may have changed sys.path.
+        try:
+            sys.path.remove(path_entry)
+        except ValueError:
+            pass
 
     return 0
 
