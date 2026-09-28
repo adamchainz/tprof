@@ -1,6 +1,10 @@
-=========
-🎯 tprof
-=========
+=====
+tprof
+=====
+
+.. image:: https://raw.githubusercontent.com/adamchainz/tprof/main/logo.svg
+   :alt: tprof
+   :width: 400
 
 .. image:: https://img.shields.io/github/actions/workflow/status/adamchainz/tprof/main.yml.svg?branch=main&style=for-the-badge
    :target: https://github.com/adamchainz/tprof/actions?workflow=CI
