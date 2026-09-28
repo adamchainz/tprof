@@ -15,6 +15,8 @@ Unreleased
 
 * Restore ``sys.path`` when running a module with ``-m`` fails.
 
+* Add the script's directory to ``sys.path`` when running a script, matching ``python script.py``.
+  This allows scripts to import, and targets to refer to, modules next to the script.
 
 1.3.0 (2026-08-08)
 ------------------
