@@ -232,6 +232,22 @@ class TestTprof:
         )
         assert errlines[3].rstrip().endswith(" n/a")
 
+    def test_nested(self, capsys):
+        def outer() -> int:
+            return 1
+
+        def inner() -> int:  # pragma: no cover
+            return 2
+
+        with tprof(outer) as results:
+            outer()
+            with pytest.raises(ValueError), tprof(inner):
+                pass  # pragma: no cover
+
+        assert len(results) == 1
+        assert results[0].name.endswith("outer")
+        assert results[0].calls == 1
+
     def test_results(self, capsys):
         def sample() -> int:
             return 42
