@@ -232,6 +232,22 @@ class TestTprof:
         )
         assert errlines[3].rstrip().endswith(" n/a")
 
+    def test_compare_uncalled_target(self, capsys):
+        def before() -> int:
+            return 1
+
+        def after() -> int:  # pragma: no cover
+            return 2
+
+        with tprof(before, after, compare=True):
+            before()
+
+        out, err = capsys.readouterr()
+        errlines = err.splitlines()
+        assert len(errlines) == 4
+        assert errlines[2].rstrip().endswith(" -")
+        assert errlines[3].rstrip().endswith(" n/a")
+
     def test_nested(self, capsys):
         def outer() -> int:
             return 1
