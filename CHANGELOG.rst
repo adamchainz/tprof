@@ -7,6 +7,10 @@ Unreleased
 
 * Support Python 3.15.
 
+* Fix timings for generators, coroutines, and asynchronous generators to exclude time spent suspended.
+
+  `PR #49 <https://github.com/adamchainz/tprof/pull/49>`__.
+
 * Fix ``sys.argv[0]`` being ``None`` when running a script with the command line interface.
 
 * Fix a failed nested ``tprof()`` call corrupting the results of the active profiling session.

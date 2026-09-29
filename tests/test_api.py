@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import time
+from collections.abc import Generator
 from concurrent.futures import ThreadPoolExecutor
 from typing import NoReturn
 
@@ -373,6 +375,96 @@ class TestTprof:
         assert str(excinfo.value).startswith(
             f"Cannot load baseline from {str(path)!r}:"
         )
+
+    def test_generator(self, capsys):
+        timestamps: list[int] = []
+
+        def values() -> Generator[int]:
+            timestamps.append(time.perf_counter_ns())
+            yield 1
+            yield 2
+            timestamps.append(time.perf_counter_ns())
+
+        with tprof(values) as results:
+            generator = values()
+            next(generator)
+            time.sleep(0.01)
+            next(generator)
+            with pytest.raises(StopIteration):
+                next(generator)
+
+        wall_ns = timestamps[1] - timestamps[0]
+        (function_stats,) = results
+        assert function_stats.calls == 1
+        # tprof excludes the suspended sleep, so it's faster than the wall time.
+        assert function_stats.total_ns < wall_ns
+
+    def test_generator_throw(self, capsys):
+        timestamps: list[int] = []
+
+        def values() -> Generator[int]:
+            timestamps.append(time.perf_counter_ns())
+            try:
+                yield 1
+            finally:
+                timestamps.append(time.perf_counter_ns())
+
+        with tprof(values) as results:
+            generator = values()
+            next(generator)
+            time.sleep(0.01)
+            with pytest.raises(ValueError):
+                generator.throw(ValueError("Boom"))
+
+        wall_ns = timestamps[1] - timestamps[0]
+        (function_stats,) = results
+        assert function_stats.calls == 1
+        # tprof excludes the suspended sleep, so it's faster than the wall time.
+        assert function_stats.total_ns < wall_ns
+
+    def test_generator_abandoned(self, capsys):
+        sleep_ns: list[int] = []
+
+        def slow() -> Generator[int]:
+            start = time.perf_counter_ns()
+            time.sleep(0.01)
+            sleep_ns.append(time.perf_counter_ns() - start)
+            yield 1
+            yield 2  # pragma: no cover
+
+        def fast() -> Generator[int]:
+            yield 1
+
+        with tprof(slow, fast) as results:
+            generator = slow()
+            next(generator)
+            del generator
+            for _ in range(10):
+                list(fast())
+
+        fast_stats = results[1]
+        assert fast_stats.calls == 10
+        # The abandoned generator's sleep time is not attributed to a later
+        # frame reusing its address.
+        assert fast_stats.max_ns < sleep_ns[0]
+
+    def test_coroutine(self, capsys):
+        timestamps: list[int] = []
+
+        async def task() -> int:
+            timestamps.append(time.perf_counter_ns())
+            await asyncio.sleep(0.01)
+            timestamps.append(time.perf_counter_ns())
+            return 1
+
+        with tprof(task) as results:
+            asyncio.run(task())
+
+        wall_ns = timestamps[1] - timestamps[0]
+        (function_stats,) = results
+        assert function_stats.calls == 1
+        # tprof excludes the awaited sleep, so it's faster than the wall time.
+        assert function_stats.total_ns < wall_ns
 
     def test_threaded(self, capsys):
         def worker() -> None:
