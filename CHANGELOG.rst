@@ -7,20 +7,32 @@ Unreleased
 
 * Support Python 3.15.
 
+  `PR #56 <https://github.com/adamchainz/tprof/pull/56>`__.
+
 * Fix timings for generators, coroutines, and asynchronous generators to exclude time spent suspended.
 
   `PR #49 <https://github.com/adamchainz/tprof/pull/49>`__.
 
 * Fix ``sys.argv[0]`` being ``None`` when running a script with the command line interface.
 
+  `PR #62 <https://github.com/adamchainz/tprof/pull/62>`__.
+
 * Fix a failed nested ``tprof()`` call corrupting the results of the active profiling session.
+
+  `PR #63 <https://github.com/adamchainz/tprof/pull/63>`__.
 
 * Fix ``--compare`` reporting a ``-100.00%`` delta for targets that were never called.
 
+  `PR #64 <https://github.com/adamchainz/tprof/pull/64>`__.
+
 * Restore ``sys.path`` when running a module with ``-m`` fails.
+
+  `PR #65 <https://github.com/adamchainz/tprof/pull/65>`__.
 
 * Add the script's directory to ``sys.path`` when running a script, matching ``python script.py``.
   This allows scripts to import, and targets to refer to, modules next to the script.
+
+  `PR #66 <https://github.com/adamchainz/tprof/pull/66>`__.
 
 1.3.0 (2026-08-08)
 ------------------
