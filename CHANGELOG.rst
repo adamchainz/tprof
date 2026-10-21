@@ -2,8 +2,8 @@
 Changelog
 =========
 
-Unreleased
-----------
+1.5.0 (2026-10-21)
+------------------
 
 * Publish wheels for Python 3.15.
 
